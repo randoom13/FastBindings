@@ -1,0 +1,49 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>FastBindings</RootNamespace>
+    <SignAssembly>True</SignAssembly>
+    <PackageRequireLicenseAcceptance>False</PackageRequireLicenseAcceptance>
+    <IncludeSymbols>True</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <NeutralLanguage>en</NeutralLanguage>
+    <AssemblyVersion>1.1.3.0</AssemblyVersion>
+    <FileVersion>1.1.3.0</FileVersion>
+    <PackageTags>#Binding #AsyncBinding #Avalonia </PackageTags>
+    <Title>Advanced Fast Bindings AVALONIA</Title>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Version>1.1.1</Version>
+    <Company>Amber</Company>
+    <Description>Advanced Fast Bindings</Description>
+    <PackageId>FastBindings.Avalonia</PackageId>
+    <Authors>Chronos</Authors>
+    <Owners>O.Kl</Owners>
+    <Description>Advanced Fast Binding and Async Fast Binding AVALONIA</Description>
+    <Copyright>The MIT License</Copyright>
+    <RepositoryUrl>https://github.com/randoom13/FastBindings</RepositoryUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+<ItemGroup>
+  <None Update="README.md">
+    <Pack>true</Pack>
+    <PackagePath>docs\</PackagePath> <!-- Optional: specify the folder in the package -->
+  </None>
+</ItemGroup>
+  <ItemGroup>
+    <None Remove="ReadMe.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.ReactiveUI" Version="$(AvaloniaVersion)" />
+    <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
+    <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+</Project>

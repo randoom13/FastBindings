@@ -1,0 +1,41 @@
+﻿<Window x:Class="WpfExample.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:WpfExample"
+        xmlns:custom="clr-namespace:FastBindings;assembly=FastBinding.Net5"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="450" Width="800">
+    <StackPanel>
+        <Label x:Name="RRR" Width="299"/>
+        <TextBox Text="{custom:FastBinding Mod.MyProperty;MyProperty1;$[[RRR].ActualWidth], CacheStrategy=Simple,
+          ConverterName=Test, ConverterPath=Mod}" />
+        <TextBox Text="{custom:FastBinding Mod.MyProperty;MyProperty1;$[[RRR].SizeChanged], CacheStrategy=Simple,
+            ConverterName=Test, ConverterPath=Mod}" />         
+        <ListBox>
+            <ListBoxItem>
+                <TextBlock Text="{custom:FastBinding Mod.MyProperty;MyProperty2;$[[ListBox/1].ActualWidth], CacheStrategy=Simple,ConverterName=Test, ConverterPath=Mod}" />
+            </ListBoxItem>
+            <ListBoxItem>
+                <TextBlock Text="dfdd"/>
+            </ListBoxItem>
+            <ListBoxItem>
+                <TextBlock Text="dfdfd"/>
+            </ListBoxItem>
+        </ListBox>
+        <TextBox Text="{custom:AsyncFastBinding Mod.Test, NotificationName =UU, NotificationPath=Mod}" /> 
+        <Button Height="40" Click="Button_Click" Content="Test"/>
+
+        <ListBox ItemsSource="{Binding Items}">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel>
+                        <Label Content="{Binding Text}" />
+                        <TextBox Text="{custom:FastBinding Mod.MyProperty, DataContextSource=StackPanel/2}" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </StackPanel>
+</Window>

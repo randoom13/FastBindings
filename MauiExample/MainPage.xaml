@@ -1,0 +1,65 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:MauiExample"
+             xmlns:custom="clr-namespace:FastBindings;assembly=FastBinding.MAUI"
+             x:Class="MauiExample.MainPage">
+    <ScrollView>
+        <VerticalStackLayout
+            Spacing="25"
+            Padding="30,0"
+            VerticalOptions="Center">
+            <Label Text="{custom:AsyncFastBinding Mod.Test, NotificationName =UU, NotificationPath=Mod}" />
+            <Label Text="{local:MyCustomExtension Greeting='Hi', Name='Maui'}" />
+            <Label Text="{Binding Greeting}"  HorizontalOptions="Fill" VerticalOptions="Fill"/>
+            <Label HorizontalOptions="Fill"  x:Name="RRR" Text="fdfdfdfdfdfdfdfdfdfdfdfdfddddddddddddddddddddddddddddddddddddddddd" 
+                   />
+            <Entry Text="{custom:FastBinding Mod.MyProperty;MyProperty1;$[[RRR].Width], CacheStrategy=Simple,
+        ConverterName=Test, ConverterPath=Mod}" />
+           <Label Text="{custom:FastBinding Mod.MyProperty;MyProperty1;$[[RRR].SizeChanged], CacheStrategy=Simple,
+    ConverterName=Test, ConverterPath=Mod}" />
+            
+            <ListView ItemsSource="{Binding Items}">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <ViewCell>
+                            <StackLayout>
+                            <Label Text="{Binding Text}" />
+                                <Label Text="{custom:FastBinding Mod.MyProperty,DataContextSource=VerticalStackLayout/1}" />
+                            </StackLayout>
+                        </ViewCell>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <!--<Image
+                Source="dotnet_bot.png"
+                SemanticProperties.Description="Cute dot net bot waving hi to you!"
+                HeightRequest="200"
+                HorizontalOptions="Center" />
+
+            <Label
+                Text="Hello, World!"
+                SemanticProperties.HeadingLevel="Level1"
+                FontSize="32"
+                HorizontalOptions="Center" />
+
+            <Label
+                Text="Welcome to .NET Multi-platform App UI"
+                SemanticProperties.HeadingLevel="Level2"
+                SemanticProperties.Description="Welcome to dot net Multi platform App U I"
+                FontSize="18"
+                HorizontalOptions="Center" />
+            -->
+            
+
+            <Button
+                x:Name="CounterBtn"
+                Text="Click me"
+                SemanticProperties.Hint="Counts the number of times you click"
+                Clicked="OnCounterClicked"
+                HorizontalOptions="Center" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

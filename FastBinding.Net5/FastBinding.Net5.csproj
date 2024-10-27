@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net5.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>FastBindings</RootNamespace>
+    <AssemblyName>FastBinding.Net5</AssemblyName>
+    <PackageTags>#Binding #AsyncBinding #WPF #MAUI #Avalonia</PackageTags>
+    <FileVersion>1.1.3.0</FileVersion>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageId>FastBindings</PackageId>
+    <Version>1.1.1</Version>
+    <Title>Advanced Fast Bindings (MAUI, WPF, AVALONIA)</Title>
+    <Company>Amber</Company>
+    <NeutralLanguage>en</NeutralLanguage>
+    <AssemblyVersion>1.1.1.0</AssemblyVersion>
+    <Authors>Chronos</Authors>
+    <Owners>O.Kl</Owners> <!-- Package owner(s) -->
+    <Description>Advanced Bindings</Description>
+    <RepositoryUrl>https://github.com/randoom13/FastBindings</RepositoryUrl>
+    <LicenseExpression>MIT</LicenseExpression> <!-- Specify the license type -->
+    <LicenseFile>LICENSE</LicenseFile>
+    <PackageReadmeFile>ReadMe.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile> <!-- Specify the license file name -->
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="..\FastBinding.Avalonia\ReadMe.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="LICENSE.txt">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+</Project>

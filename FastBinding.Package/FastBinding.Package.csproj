@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net5.0;net4.5;</TargetFrameworks>
+	  <PackageId>FastBindings.WPF</PackageId>
+	  <Company>Amber</Company>
+	  <PackageTags>#Binding #WPF #AsyncBinding</PackageTags>
+	  <FileVersion>1.1.2</FileVersion>
+	  <AssemblyVersion>1.1.3.0</AssemblyVersion>
+	  <NeutralLanguage>en</NeutralLanguage>
+	  <Title>Advanced Fast Binding WPF</Title>
+	  <Description>Advanced Bindings</Description>
+	  <Authors>Chronos</Authors>
+	  <Owners>O.Kl</Owners>
+	  <Version>1.1.1</Version>
+	  <RepositoryUrl>https://github.com/randoom13/FastBindings</RepositoryUrl>
+  </PropertyGroup>
+	<PropertyGroup Condition="'$(TargetFramework)' == 'net5.0'">
+		<LangVersion>8.0</LangVersion>
+		<Nullable>enable</Nullable>
+		<!-- Enable nullable reference types for .NET 5.0 -->
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(TargetFramework)' == 'net4.5'">
+		<LangVersion>7.3</LangVersion>
+		<!-- Set to C# 7.3 for .NET Framework 4.5 -->
+		<Nullable>disable</Nullable>
+		<!-- Ensure nullable is disabled -->
+	</PropertyGroup>
+<ItemGroup>
+  <None Update="..\FastBinding.Net5\bin\Release\net5.0-windows\FastBinding.Net5.dll">
+    <Pack>true</Pack>
+    <PackagePath>lib\net5.0\</PackagePath>
+  </None>
+  <None Update="..\FastBinding.Net4.5\bin\Release\net5.0-windows\FastBinding.Net4.5.dll">
+    <Pack>true</Pack>
+    <PackagePath>lib\net4.5\</PackagePath>
+  </None>
+</ItemGroup>
+</Project>
