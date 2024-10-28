@@ -14,10 +14,10 @@
     <PackageTags>#Binding #AsyncBinding #Avalonia </PackageTags>
     <Title>Advanced Fast Bindings AVALONIA</Title>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <Version>1.1.1</Version>
+    <Version>1.1.2</Version>
     <Company>Amber</Company>
     <Description>Advanced Fast Bindings</Description>
-    <PackageId>FastBindings.Avalonia</PackageId>
+    <PackageId>FastBindings</PackageId>
     <Authors>Chronos</Authors>
     <Owners>O.Kl</Owners>
     <Description>Advanced Fast Binding and Async Fast Binding AVALONIA</Description>
