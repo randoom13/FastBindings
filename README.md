@@ -1,4 +1,3 @@
-Packages - FastBindings (Avalonia)  FastBindings.WPF (WPF)  FastBindings.MAUI(MAUI)
 
 #FastBinding vs AsyncFastBinding
 =====================================
