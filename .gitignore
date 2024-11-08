@@ -452,3 +452,7 @@ $RECYCLE.BIN/
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+/FastBinding.Net4.5/net45
+/FastBinding.Net4.5/nuget.exe
+/FastBindings.WPF.nuspec
+/nuget.exe
