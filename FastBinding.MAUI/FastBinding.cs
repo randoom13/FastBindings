@@ -1,12 +1,15 @@
 ﻿using System.ComponentModel;
+using FastBindings.Helpers;
 using FastBindings.Interfaces;
+using FastBindings.BindingManagers;
 
 namespace FastBindings
 {
     [ContentProperty(nameof(Sources))]
-    public class FastBinding : IMarkupExtension
+    public class FastBinding : BaseBinding
     {
-        private FastBindingUpdateManager _updateManager = new FastBindingUpdateManager();
+        private readonly BindingUpdateManager<IPropertyAccessor> _updateManager
+            = new BindingUpdateManager<IPropertyAccessor>(new FastViewModelTreeHelper());
 
         [DefaultValue(null)]
         public string? NotificationPath
@@ -84,36 +87,21 @@ namespace FastBindings
             set => _updateManager.Converter = value;
         }
 
-        [DefaultValue(CacheStrategy.None)]
-        public CacheStrategy CacheStrategy { get; set; }
-
-        public object? ProvideValue(IServiceProvider serviceProvider)
+        public override object? ProvideValue(IServiceProvider serviceProvider)
         {
             if (string.IsNullOrEmpty(Sources))
                 return BindableProperty.UnsetValue;
 
-            var valueTarget = serviceProvider.GetService(typeof(IProvideValueTarget)) as IProvideValueTarget;
-            var targetProperty = valueTarget?.TargetProperty as BindableProperty;
-            if (targetProperty == null)
-                return BindableProperty.UnsetValue;
-
-            var targetObject = valueTarget?.TargetObject as BindableObject;
-            if (targetObject == null)
-                return BindableProperty.UnsetValue;
-
-            // Unfortunately, any binding to another dependency object without it does not work.
-            var visualElement = targetObject as VisualElement;
-            if (visualElement != null)
-            {
-                _updateManager.ApplyTargets(targetObject, targetProperty);
-                visualElement.Loaded += OnTargetLoaded;
-            }
-
-            return targetProperty.DefaultValue;
+            return base.ProvideValue(serviceProvider);
         }
 
-        // Unfortunately, any binding to another dependency object without it does not work.
-        private void OnTargetLoaded(object? sender, EventArgs? args)
+        internal override void ApplyTargets(BindableObject targetObject, BindableProperty targetProperty,
+            BindableObject? anchorObject)
+        {
+            _updateManager.ApplyTargets(targetObject, targetProperty, anchorObject);
+        }
+
+        internal override void OnTargetLoaded(object? sender, EventArgs? args)
         {
             var element = sender as VisualElement;
             if (element != null)

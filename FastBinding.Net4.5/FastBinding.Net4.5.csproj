@@ -14,7 +14,8 @@
     <WarningLevel>4</WarningLevel>
     <Deterministic>true</Deterministic>
     <TargetFrameworkProfile />
-    <LangVersion>8.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <LangVersion>8</LangVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -55,26 +56,41 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AsyncFastBinding.cs" />
-    <Compile Include="AsyncFastBindingUpdateManager.cs" />
+    <Compile Include="BaseBinding.cs" />
+    <Compile Include="BindingManagers\AsyncBindingUpdateManager.cs" />
+    <Compile Include="BindingManagers\AsyncOneWayBindingUpdateManager.cs" />
+    <Compile Include="AsyncOneWayFastBinding.cs" />
+    <Compile Include="AsyncOneWayCommonBinding.cs" />
+    <Compile Include="AttachedOneWayBindings.cs" />
     <Compile Include="BindingMode.cs" />
     <Compile Include="Common\BaseViewModel.cs" />
     <Compile Include="CacheStratagy.cs" />
-    <Compile Include="ConvertersProxy.cs" />
-    <Compile Include="DataContextParams.cs" />
+    <Compile Include="BindingManagers\ConvertersProxy.cs" />
+    <Compile Include="StateManagerObjects\DataContextParams.cs" />
+    <Compile Include="CommonBinding.cs" />
     <Compile Include="FastBinding.cs" />
-    <Compile Include="FastBindingUpdateManager.cs" />
-    <Compile Include="Helpers\AccessorHelper.cs" />
+    <Compile Include="BindingManagers\BindingUpdateManager.cs" />
+    <Compile Include="Helpers\ExpressionTreeHelper.cs" />
+    <Compile Include="Helpers\MembersHelper.cs" />
     <Compile Include="Helpers\ExceptionUtility.cs" />
+    <Compile Include="Helpers\FastViewModelTreeHelper.cs" />
+    <Compile Include="Helpers\LightViewModelTreeHelper.cs" />
+    <Compile Include="Helpers\MethodsAccessor.cs" />
     <Compile Include="Helpers\PropertyInfoResult.cs" />
     <Compile Include="Helpers\PropertyPathParser.cs" />
-    <Compile Include="Helpers\PropertyUtility.cs" />
+    <Compile Include="Helpers\ReflectionUtility.cs" />
+    <Compile Include="Helpers\SubscriberProxy.cs" />
     <Compile Include="Helpers\TasksHelper.cs" />
     <Compile Include="Helpers\ViewModelTreeHelper.cs" />
     <Compile Include="Helpers\VisualTreeHelperEx.cs" />
-    <Compile Include="NotificationProxy.cs" />
+    <Compile Include="Interfaces\ISubscriber.cs" />
+    <Compile Include="BindingManagers\NotificationProxy.cs" />
     <Compile Include="Interfaces\INotificationFilter.cs" />
     <Compile Include="Interfaces\IPropertyAccessor.cs" />
     <Compile Include="Interfaces\IValueConverterBase.cs" />
+    <Compile Include="BindingManagers\OneWayBindingUpdateManager.cs" />
+    <Compile Include="OneWayFastBinding.cs" />
+    <Compile Include="OneWayCommonBinding.cs" />
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -87,6 +103,10 @@
     <Compile Include="StateManagerObjects\StateManagerFactory.cs" />
     <Compile Include="StateManagerObjects\WeakEventHandler.cs" />
     <Compile Include="StateManagerObjects\WeakEventPublisher.cs" />
+    <Compile Include="BindingManagers\TargetInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="FastBindings.WPF_45.nuspec" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

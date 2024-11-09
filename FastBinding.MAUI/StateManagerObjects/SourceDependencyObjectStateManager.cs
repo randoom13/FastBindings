@@ -1,10 +1,11 @@
-﻿using System.ComponentModel;
-using FastBindings.Helpers;
+﻿using FastBindings.Helpers;
+using System.ComponentModel;
 
 namespace FastBindings.StateManagerObjects
 {
     internal class SourceDependencyObjectStateManager : ISourceStateManager
     {
+        private string? _optional;
         private readonly WeakReference _sourceObjectRef;
         private readonly WeakReference _sourcePropertyRef;
         private readonly WeakEventPublisher<object> _propertyUpdatedPublisher = new WeakEventPublisher<object>();
@@ -19,12 +20,13 @@ namespace FastBindings.StateManagerObjects
             remove { _propertyUpdatedPublisher.Unsubscribe(value); }
         }
 
-        public SourceDependencyObjectStateManager(BindableProperty sourceProperty, BindableObject targetObject)
+        public SourceDependencyObjectStateManager(BindableProperty sourceProperty, BindableObject targetObject, string? optional)
         {
             _sourcePropertyRef = new WeakReference(sourceProperty);
-            
+
             _sourceObjectRef = new WeakReference(targetObject);
             _lazyPropertyInfoResult = new Lazy<PropertyInfoResult>(GetPropertyInfo, false);
+            _optional = optional;
         }
 
         private PropertyInfoResult GetPropertyInfo()
@@ -36,7 +38,7 @@ namespace FastBindings.StateManagerObjects
                 return new PropertyInfoResult();
             }
 
-            return PropertyUtility.BildPropertyInfo(source, property.PropertyName);
+            return ReflectionUtility.BildPropertyInfo(source, property.PropertyName);
         }
 
         public object? GetSourceProperty(object? dataContext)
@@ -54,6 +56,7 @@ namespace FastBindings.StateManagerObjects
             }
             return source.GetValue(property);
         }
+
         public object? GetSourceProperty(object? dataContext, bool isWrapException)
         {
             if (!_lazyPropertyInfoResult.Value.IsValid ||
@@ -69,15 +72,9 @@ namespace FastBindings.StateManagerObjects
             }
             return ExceptionUtility.Handle(() =>
             {
-                _updatingDependObj = true;
-                try
-                {
-                    return source.GetValue(property);
-                }
-                finally
-                {
-                    _updatingDependObj = false;
-                }
+                var result = source.GetValue(property!);
+                return string.IsNullOrEmpty(_optional) ||
+                      CommonViewModelTreeHelper.TryCalculateValue(_optional, ref result) ? result : null;
             }, isWrapException, StateManagerFactory.ErrorMessage);
         }
 
@@ -92,20 +89,28 @@ namespace FastBindings.StateManagerObjects
             var source = _sourceObjectRef.Target as BindableObject;
             var property = _sourcePropertyRef.Target as BindableProperty;
 
-            if (source == null || property == null || property.ReturnType != value?.GetType())
+            if (source == null || property == null || !ReflectionUtility.IsValidType(value, property.ReturnType))
             {
                 return;
             }
 
-            _updatingDependObj = true;
-            try
+            ExceptionUtility.Handle(() =>
             {
-                source.SetValue(property, value);
-            }
-            finally
-            {
-                _updatingDependObj = false;
-            }
+                _updatingDependObj = true;
+                try
+                {
+                    if (string.IsNullOrEmpty(_optional))
+                    {
+                        source.SetValue(property!, value);
+                        return true;
+                    }
+                    return CommonViewModelTreeHelper.TrySetValue(_optional, source.GetValue(property!), value);
+                }
+                finally
+                {
+                    _updatingDependObj = false;
+                }
+            }, true, StateManagerFactory.ErrorMessage);
         }
 
         public void Subscribe(object? dataContext)
@@ -142,7 +147,13 @@ namespace FastBindings.StateManagerObjects
             {
                 return;
             }
-            _propertyUpdatedPublisher.RaiseEvent(this, source.GetValue(property));
+            var ans = ExceptionUtility.Handle(() =>
+            {
+                var result = source.GetValue(property!);
+                return string.IsNullOrEmpty(_optional) ||
+                      CommonViewModelTreeHelper.TryCalculateValue(_optional, ref result) ? result : null;
+            }, true, StateManagerFactory.ErrorMessage);
+            _propertyUpdatedPublisher.RaiseEvent(this, ans);
         }
     }
 }

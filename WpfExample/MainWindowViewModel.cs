@@ -1,10 +1,48 @@
 ﻿using FastBindings.Common;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Drawing;
 
 namespace WpfExample
 {
-    public class MainWindowViewModel : CommonBaseViewModel<MainWindowViewModel>
+    public class MainWindowViewModel //: CommonBaseViewModel<MainWindowViewModel>
+          : INotifyPropertyChanged
     {
+        // This event is part of the INotifyPropertyChanged interface
+        public event PropertyChangedEventHandler? PropertyChanged;
+        // Method to raise the PropertyChanged event
+        protected void OnPropertyChanged(string propertyName)
+        {
+            
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        private System.Windows.Media.Color _color = System.Windows.Media.Colors.Green;
+
+        public System.Windows.Media.Color Color 
+        {
+            get => _color;
+            set 
+            {
+                _color = value;
+                OnPropertyChanged(nameof(Color));
+            }
+        }
+
+        private SubscriberExample _example = new SubscriberExample();
+
+        public void Check(object d)
+        {
+
+        }
+
+        public void GetMargin(object h)
+        {
+        }
+
+        public SubscriberExample Subscriber => _example;
+
+
         public ObservableCollection<Item> Items { get; set; }
         public MainWindowViewModel()
         {

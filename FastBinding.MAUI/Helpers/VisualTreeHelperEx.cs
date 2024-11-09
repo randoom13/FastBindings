@@ -6,7 +6,7 @@
             (obj as Element)?.Parent != null;
 
         public static T? GetParent<T>(BindableObject? obj) where T : BindableObject
-        {          
+        {
             return (obj as Element)?.Parent as T;
         }
 
@@ -24,7 +24,7 @@
             }
             return item;
         }
- 
+
         public static BindableObject? GetParent(BindableObject? obj, int level, string typeName)
         {
             var item = obj;
@@ -40,9 +40,9 @@
             return item;
         }
 
-           public static T? FindChildByName<T>(BindableObject? parent, string childName) where T : BindableObject
+        public static T? FindChildByName<T>(BindableObject? parent, string childName) where T : BindableObject
         {
-            if (parent == null) 
+            if (parent == null)
                 return null;
 
             // Check if the parent itself has the name we're looking for
@@ -50,17 +50,26 @@
             {
                 return parent as T;
             }
-
             // If the parent is a layout, check its children
-            if (parent is Layout layout)
+            if (parent is IList<IView> children)
             {
-                foreach (var child in layout.Children)
+                foreach (var child in children)
                 {
                     var result = FindChildByName<T>(child as BindableObject, childName);
                     if (result != null)
                     {
                         return result;
                     }
+                }
+            }
+
+            if (parent is IContentView contentView)
+            {
+                var content = contentView.PresentedContent;
+                if (content != null)
+                {
+                    // Recursively get the children if needed
+                    FindChildByName<T>(content as BindableObject, childName);
                 }
             }
 

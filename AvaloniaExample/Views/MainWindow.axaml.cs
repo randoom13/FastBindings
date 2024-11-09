@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Media;
 using AvaloniaExample.ViewModels;
 using System;
 
@@ -16,6 +17,9 @@ namespace AvaloniaExample.Views
 
             var model = GetValue(Control.DataContextProperty) as MainWindowViewModel;
             model!.Mod.MyProperty = Guid.NewGuid().ToString();
+            model!.Show = !model.Show;
+            model!.Color = model!.Color == Colors.Green ? Colors.Red : Colors.Green;
+            
         }
     }
 }

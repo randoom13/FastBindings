@@ -78,7 +78,6 @@ namespace FastBindings.Helpers
             return item;
         }
 
-
         public static AvaloniaObject? FindChildByName(AvaloniaObject? parent, string childName)
         {
             if (parent == null) 

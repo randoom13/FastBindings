@@ -6,6 +6,84 @@ namespace FastBindings.Helpers
 {
     internal class VisualTreeHelperEx
     {
+        public static bool CanSubscribeOnDataContext(DependencyObject obj) =>
+           obj != null && (obj is FrameworkElement || obj is FrameworkContentElement);
+
+        public static bool SubscribeDataContext(DependencyObject obj, DependencyPropertyChangedEventHandler dataContextChanged)
+        {
+            var frameworkElement = obj as FrameworkElement;
+            if (frameworkElement != null)
+            {
+                frameworkElement.DataContextChanged += dataContextChanged;
+                return true;
+            }
+            else
+            {
+                var frameworkContentElement = obj as FrameworkContentElement;
+                if (frameworkContentElement != null)
+                {
+                    frameworkContentElement.DataContextChanged += dataContextChanged;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public static void UnSubscribeDataContext(DependencyObject obj, DependencyPropertyChangedEventHandler dataContextChanged)
+        {
+            var frameworkElement = obj as FrameworkElement;
+            if (frameworkElement != null)
+            {
+                frameworkElement.DataContextChanged -= dataContextChanged;
+            }
+            else
+            {
+                var frameworkContentElement = obj as FrameworkContentElement;
+                if (frameworkContentElement != null)
+                    frameworkContentElement.DataContextChanged -= dataContextChanged;
+            }
+        }
+
+        public static bool SubscribeLoaded(DependencyObject obj, RoutedEventHandler onLoaded)
+        {
+            var frameworkElement = obj as FrameworkElement;
+            if (frameworkElement != null)
+            {
+                frameworkElement.Loaded += onLoaded;
+                return true;
+            }
+            else
+            {
+                var frameworkContentElement = obj as FrameworkContentElement;
+                if (frameworkContentElement != null)
+                {
+                    frameworkContentElement.Loaded += onLoaded;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public static bool UnSubscribeLoaded(DependencyObject obj, RoutedEventHandler onLoaded)
+        {
+            var frameworkElement = obj as FrameworkElement;
+            if (frameworkElement != null)
+            {
+                frameworkElement.Loaded -= onLoaded;
+                return true;
+            }
+            else
+            {
+                var frameworkContentElement = obj as FrameworkContentElement;
+                if (frameworkContentElement != null)
+                {
+                    frameworkContentElement.Loaded -= onLoaded;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         public static bool IsAvailable(DependencyObject obj) =>
             VisualTreeHelper.GetParent(obj) != null ||  LogicalTreeHelper.GetParent(obj) != null;
 
@@ -89,5 +167,45 @@ namespace FastBindings.Helpers
             }
             return null;
         }
+
+        private static bool ContainsObject(DependencyObject child, DependencyObject obj)
+        {
+            if (child == null)
+                return false;
+
+            LocalValueEnumerator localValueEnumerator = child.GetLocalValueEnumerator();
+            while (localValueEnumerator.MoveNext())
+            {
+                var value = localValueEnumerator.Current.Value;
+                if (ReferenceEquals(value, obj))
+                    return true;
+            }
+            return false;
+        }
+
+        public static DependencyObject FindParentByValue(DependencyObject topParent, DependencyObject ch)
+        {
+            if (topParent == null)
+                return null;
+
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(topParent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(topParent, i);
+
+                if (ContainsObject(child, ch))
+                {
+                    return child;
+                }
+
+                var childFound = FindParentByValue(child, ch);
+                if (childFound != null)
+                {
+                    return childFound;
+                }
+            }
+
+            return null;
+        }
+
     }
 }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using FastBindings.Helpers;
+using System;
 
 namespace FastBindings.StateManagerObjects
 {
@@ -11,7 +12,10 @@ namespace FastBindings.StateManagerObjects
         }
         public event EventHandler<object> PropertyUpdated
         { add { } remove { } }
-        public object? GetSourceProperty(object? dataContext, bool isWrapException) => null;
+
+        public object? GetSourceProperty(object? dataContext, bool isWrapException) =>
+            isWrapException ? new ExceptionHolder(_ex) : _ex;
+
         public void SetSourceProperty(object? value) { }
         public void Subscribe(object? dataContext) { }
         public void Unsubscribe() { }

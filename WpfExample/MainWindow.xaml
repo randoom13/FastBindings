@@ -9,13 +9,26 @@
         Title="MainWindow" Height="450" Width="800">
     <StackPanel>
         <Label x:Name="RRR" Width="299"/>
-        <TextBox Text="{custom:FastBinding Mod.MyProperty;MyProperty1;$[[RRR].ActualWidth], CacheStrategy=Simple,
-          ConverterName=Test, ConverterPath=Mod}" />
-        <TextBox Text="{custom:FastBinding Mod.MyProperty;MyProperty1;$[[RRR].SizeChanged], CacheStrategy=Simple,
-            ConverterName=Test, ConverterPath=Mod}" />         
+        <TextBox Text="{custom:CommonBinding Mod.MyProperty;MyProperty1;$[[RRR].ActualWidth], CacheStrategy=Simple,
+          ConverterName=Test, ConverterPath=Mod}" >
+            <custom:AttachedOneWayBindings.Collections>
+                <custom:OneWayBindingCollection>
+                    <custom:AsyncOneWayCommonBinding Sources="$[[this].SizeChanged]" Target="Mod.Incoming"/>
+                    <custom:OneWayCommonBinding Sources="$[[this].Margin][Left]" Target="GetMargin("/>
+                    <custom:OneWayCommonBinding Sources="$[[this].SizeChanged][EventArgs]" Target="-Subscriber-"/>
+                    <custom:OneWayCommonBinding Sources="$[[this].SizeChanged][EventArgs.NewSize.Height]" Target="Check("/>
+                </custom:OneWayBindingCollection>
+            </custom:AttachedOneWayBindings.Collections>
+        </TextBox>
+        <TextBox Background="Gray" Text="{custom:CommonBinding Mod.MyProperty;MyProperty1;$[[RRR].SizeChanged], CacheStrategy=Simple,
+            ConverterName=Test, ConverterPath=Mod}" BorderThickness="4" >
+            <TextBox.Foreground>
+                <SolidColorBrush Color="{custom:CommonBinding Color}"/>
+            </TextBox.Foreground>
+        </TextBox>
         <ListBox>
             <ListBoxItem>
-                <TextBlock Text="{custom:FastBinding Mod.MyProperty;MyProperty2;$[[ListBox/1].ActualWidth], CacheStrategy=Simple,ConverterName=Test, ConverterPath=Mod}" />
+                <TextBlock Text="{custom:CommonBinding Mod.MyProperty;MyProperty2;$[[ListBox/1].ActualWidth], CacheStrategy=Simple,ConverterName=Test, ConverterPath=Mod}" />
             </ListBoxItem>
             <ListBoxItem>
                 <TextBlock Text="dfdd"/>
@@ -24,15 +37,14 @@
                 <TextBlock Text="dfdfd"/>
             </ListBoxItem>
         </ListBox>
-        <TextBox Text="{custom:AsyncFastBinding Mod.Test, NotificationName =UU, NotificationPath=Mod}" /> 
+        <TextBox Text="{custom:AsyncCommonBinding Mod.Test, NotificationName = UU, NotificationPath=Mod}" />
         <Button Height="40" Click="Button_Click" Content="Test"/>
-
         <ListBox ItemsSource="{Binding Items}">
             <ListBox.ItemTemplate>
                 <DataTemplate>
                     <StackPanel>
                         <Label Content="{Binding Text}" />
-                        <TextBox Text="{custom:FastBinding Mod.MyProperty, DataContextSource=StackPanel/2}" />
+                        <TextBox Text="{custom:CommonBinding Mod.MyProperty, DataContextSource=StackPanel/2}" />
                     </StackPanel>
                 </DataTemplate>
             </ListBox.ItemTemplate>

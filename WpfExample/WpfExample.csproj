@@ -8,11 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FastBindings.WPF" Version="1.1.1" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\FastBinding.Net5\FastBinding.Net5.csproj" />
+    <PackageReference Include="FastBindings.WPF" Version="1.1.3" />
+    <PackageReference Include="FastBindings.WPF_50" Version="1.1.3" />
   </ItemGroup>
 
 </Project>

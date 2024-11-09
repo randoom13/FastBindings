@@ -28,7 +28,7 @@
     		<Description>Advanced Bindings</Description>
     		<Authors>Chronos</Authors>
                 <Owners>O.Kl</Owners>
-		<Version>1.1.2</Version>
+		<Version>1.1.3</Version>
                 <RepositoryUrl>https://github.com/randoom13/FastBindings</RepositoryUrl>
 	</PropertyGroup>
 

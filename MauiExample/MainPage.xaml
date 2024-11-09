@@ -9,14 +9,31 @@
             Spacing="25"
             Padding="30,0"
             VerticalOptions="Center">
-            <Label Text="{custom:AsyncFastBinding Mod.Test, NotificationName =UU, NotificationPath=Mod}" />
-            <Label Text="{local:MyCustomExtension Greeting='Hi', Name='Maui'}" />
+            <Grid>
+                <Label x:Name="qq" Text="{custom:AsyncCommonBinding Mod.Test, NotificationName =UU, NotificationPath=Mod}"
+                 TextColor="Black" >
+                </Label>
+                <Rectangle Opacity="0.5" HorizontalOptions="FillAndExpand" VerticalOptions="FillAndExpand">
+                    <Rectangle.Fill>
+                    <SolidColorBrush Color="{custom:CommonBinding Color}"/>
+                </Rectangle.Fill>
+            </Rectangle>
+            </Grid>
+            <Label Text="{local:MyCustomExtension Greeting='Hi', Name='Maui'}"/>
             <Label Text="{Binding Greeting}"  HorizontalOptions="Fill" VerticalOptions="Fill"/>
-            <Label HorizontalOptions="Fill"  x:Name="RRR" Text="fdfdfdfdfdfdfdfdfdfdfdfdfddddddddddddddddddddddddddddddddddddddddd" 
-                   />
-            <Entry Text="{custom:FastBinding Mod.MyProperty;MyProperty1;$[[RRR].Width], CacheStrategy=Simple,
+            <Label HorizontalOptions="Fill"  x:Name="RRR" Text="fdfdfdfdfdfdfdfdfdfdfdfdfddddddddddddddddddddddddddddddddddddddddd">
+                <custom:AttachedOneWayBindings.Collections>
+                    <custom:OneWayBindingCollection>
+                        <custom:AsyncOneWayCommonBinding Sources="$[[this].SizeChanged]" Target="Mod.Incoming"/>
+                        <custom:OneWayCommonBinding Sources="$[[this].Margin][Left]" Target="GetMargin("/>
+                        <custom:OneWayCommonBinding Sources="$[[this].SizeChanged][EventArgs.NewSize.Height]" Target="-Subscriber-"/>
+                        <custom:OneWayCommonBinding Sources="$[[this].SizeChanged][EventArgs]" Target="Check("/>
+                    </custom:OneWayBindingCollection>
+                </custom:AttachedOneWayBindings.Collections>
+            </Label>
+            <Entry Text="{custom:CommonBinding Mod.MyProperty;MyProperty1;$[[RRR].Width], CacheStrategy=Simple,
         ConverterName=Test, ConverterPath=Mod}" />
-           <Label Text="{custom:FastBinding Mod.MyProperty;MyProperty1;$[[RRR].SizeChanged], CacheStrategy=Simple,
+           <Label Text="{custom:CommonBinding Mod.MyProperty;MyProperty1;$[[RRR].SizeChanged], CacheStrategy=Simple,
     ConverterName=Test, ConverterPath=Mod}" />
             
             <ListView ItemsSource="{Binding Items}">
@@ -25,7 +42,7 @@
                         <ViewCell>
                             <StackLayout>
                             <Label Text="{Binding Text}" />
-                                <Label Text="{custom:FastBinding Mod.MyProperty,DataContextSource=VerticalStackLayout/1}" />
+                                <Label Text="{custom:CommonBinding Mod.MyProperty,DataContextSource=VerticalStackLayout/1}" />
                             </StackLayout>
                         </ViewCell>
                     </DataTemplate>

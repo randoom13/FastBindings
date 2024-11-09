@@ -10,9 +10,9 @@ namespace FastBindings.Interfaces
     public class ConverterArgs
     {
         public object?[] Values { get; set; }
-        public Type TargetType { get; set; }
+        public Type? TargetType { get; set; }
         //   public CultureInfo Culture { get; set; }
-        public ConverterArgs(object?[] values, Type targetType) 
+        public ConverterArgs(object?[] values, Type? targetType) 
         {
             Values = values;
             TargetType = targetType;

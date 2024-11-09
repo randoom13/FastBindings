@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Windows.Media;
 using System.Windows;
 
 namespace WpfExample
@@ -17,6 +18,7 @@ namespace WpfExample
         private void Button_Click(object sender, RoutedEventArgs e)
         {
             var model = DataContext as MainWindowViewModel;
+            model!.Color = model!.Color == Colors.Green ? Colors.Red : Colors.Green;
             model!.Mod.MyProperty = Guid.NewGuid().ToString();
         }
     }

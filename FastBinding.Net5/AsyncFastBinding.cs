@@ -1,15 +1,17 @@
-﻿using System;
+﻿using FastBindings.Helpers;
+using FastBindings.Interfaces;
+using System;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Markup;
-
-using FastBindings.Interfaces;
+using FastBindings.BindingManagers;
 
 namespace FastBindings
 {
-    public class AsyncFastBinding : MarkupExtension
+    public class AsyncFastBinding : BaseBinding
     {
-        private readonly AsyncFastBindingUpdateManager _updateManager = new AsyncFastBindingUpdateManager();
+        private readonly AsyncBindingUpdateManager<IPropertyAccessor> _updateManager =
+     new AsyncBindingUpdateManager<IPropertyAccessor>(new FastViewModelTreeHelper());
 
         [DefaultValue(null)]
         public string? NotificationPath
@@ -18,7 +20,7 @@ namespace FastBindings
             set => _updateManager.NotificationPath = value;
         }
 
-       [DefaultValue(null)]
+        [DefaultValue(null)]
         public string? NotificationName
         {
             get => _updateManager.NotificationName;
@@ -72,6 +74,7 @@ namespace FastBindings
             get => _updateManager.TargetNullValue;
             set => _updateManager.TargetNullValue = value;
         }
+
         [DefaultValue(null)]
         public object? FallBackValue
         {
@@ -86,15 +89,10 @@ namespace FastBindings
             set => _updateManager.Converter = value;
         }
 
-        [DefaultValue(CacheStrategy.None)]
-        public CacheStrategy CacheStrategy { get; set; }
-
-        // Constructor
         public AsyncFastBinding()
         {
         }
 
-        // Constructor with parameter
         public AsyncFastBinding(string sources)
         {
             Sources = sources;
@@ -111,27 +109,24 @@ namespace FastBindings
                 return DependencyProperty.UnsetValue;
 
             var targetObject = valueTarget?.TargetObject as DependencyObject;
+
             if (targetObject == null)
                 return DependencyProperty.UnsetValue;
 
-            var frameworkElement = targetObject as FrameworkElement;
-            if (frameworkElement != null) 
+            if (_updateManager.CanSubscribeOnDataContext(targetObject))
             {
-                _updateManager.ApplyTargets(targetObject, targetProperty);
-                frameworkElement.Loaded += OnLoaded;
-            }
+                PrepareInitialization(targetObject, targetProperty);
+            } else
+            PrepareInitialization(serviceProvider, targetObject, targetProperty);
 
             return targetProperty.DefaultMetadata?.DefaultValue ?? DependencyProperty.UnsetValue;
         }
 
-        private void OnLoaded(object sender, RoutedEventArgs e) 
+        internal override void LazyInitialization(DependencyObject targetObject, DependencyProperty targetProperty,
+    DependencyObject? dataContextObj)
         {
-            var frameworkElement = sender as FrameworkElement;
-            if (frameworkElement != null)
-            {
-                frameworkElement.Loaded -= OnLoaded;
-                _updateManager.Initialize(this, CacheStrategy);
-            }
+            _updateManager.ApplyTargets(targetObject, targetProperty, dataContextObj);
+            _updateManager.Initialize(this, CacheStrategy);
         }
     }
 }

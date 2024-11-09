@@ -1,4 +1,6 @@
 ﻿using FastBindings.Helpers;
+using FastBindings.BindingManagers;
+
 namespace FastBindings.StateManagerObjects
 {
     internal static class StateManagerFactory
@@ -8,21 +10,23 @@ namespace FastBindings.StateManagerObjects
         internal const string ErrorMessage = "[FastBinding] An error occurred while attempting to get data from the source property";
         internal const string AsyncErrorMessage = "[AsyncFastBinding] An error occurred while attempting to get data from the source property";
 
-        public static ISourceStateManager[] Build(string sources, BindableObject targetObject, 
-            DataContextParams dataContextParams, CacheStrategy cacheStrategy)
+        public static ISourceStateManager[] Build<T>(string sources, BindableObject targetObject,
+            DataContextParams dataContextParams, CacheStrategy strategy, IViewModelTreeHelper<T> treeHelper)
         {
             if (string.IsNullOrEmpty(sources)) 
             {
                 throw new ArgumentException($"{nameof(sources)}");
             }
-            var cache = cacheStrategy == CacheStrategy.Simple ? _cache : null;
+            var obj = dataContextParams.AnchorObject ?? targetObject;
+            var cache = strategy == CacheStrategy.Simple ? _cache : null;
             return sources.Split(new string[] { PropertyPathParser.PropertiesDevider },
                     StringSplitOptions.RemoveEmptyEntries).
                                Select(property =>
                                {
                                    try
                                    {
-                                       return Parse(property.Trim(), targetObject, dataContextParams, cache);
+                                       return Parse<T>(property.Trim(), obj, dataContextParams,
+                                      cache, treeHelper);
                                    }
                                    catch (Exception ex)
                                    {
@@ -34,9 +38,8 @@ namespace FastBindings.StateManagerObjects
                                }).
                 ToArray();
         }
-   
-        private static ISourceStateManager Parse(string property, BindableObject targetObject, DataContextParams dataContextParams,
-             ICache? cache)
+        private static ISourceStateManager Parse<T>(string property, BindableObject targetObject, DataContextParams dataContextParams,
+              ICache? cache, IViewModelTreeHelper<T> treeHelper)
         {
             if (string.IsNullOrEmpty(property))
             {
@@ -44,8 +47,11 @@ namespace FastBindings.StateManagerObjects
             }
             if (!PropertyPathParser.NeedApply(property))
             {
-                return new SourceViewModelStateManager(property, targetObject, dataContextParams) { Cache = cache };
+                var manager = new SourceViewModelStateManager<T>(property, targetObject, dataContextParams) { Cache = cache };
+                manager.Initialize(treeHelper);
+                return manager;
             }
+
             var propertyPathParser = new PropertyPathParser(property);
             if (!propertyPathParser.IsValid)
             {
@@ -58,15 +64,15 @@ namespace FastBindings.StateManagerObjects
             }
             try
             {
-                var depend = PropertyUtility.FindDependencyPropertyByName(child, propertyPathParser.Property);
+                var depend = ReflectionUtility.FindDependencyPropertyByName(child, propertyPathParser.Property);
                 if (depend != null)
                 {
-                    return new SourceDependencyObjectStateManager(depend, child) ;
+                    return new SourceDependencyObjectStateManager(depend, child, propertyPathParser.Optional);
                 }
-                var trackingEvent = PropertyUtility.FindEventByName(child, propertyPathParser.Property!);
+                var trackingEvent = ReflectionUtility.FindEventByName(child, propertyPathParser.Property!);
                 if (trackingEvent != null)
                 {
-                    return new SourceEventStateManager(child, trackingEvent);
+                    return new SourceEventStateManager(child, trackingEvent, propertyPathParser.Optional);
                 }
             }
             catch (Exception ex)

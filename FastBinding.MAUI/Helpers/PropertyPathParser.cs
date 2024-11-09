@@ -12,10 +12,11 @@ namespace FastBindings.Helpers
         public const string DependencyObjectCurrent = "this";
         public const string TypeLevelSplitter = "/";
         private const string ExpectedSymbols = "$[]";
-        private const string Pattern = @"\$\[\[(?<source>.+?)\]\.(?<property>.+?)\]";
+        private const string Pattern = @"\$\[\[(?<source>.+?)\]\.(?<property>.+?)\](\[(?<optional>.+?)\])?";
         public string? Source { get; private set; }
         public string? Property { get; private set; }
         public string Input { get; private set; }
+        public string? Optional { get; private set; }
 
         public readonly bool IsValid => !string.IsNullOrEmpty(Source) && !string.IsNullOrEmpty(Property);
 
@@ -39,6 +40,7 @@ namespace FastBindings.Helpers
                 // Extract name and property
                 Source = match.Groups["source"].Value;
                 Property = match.Groups["property"].Value;
+                Optional = match.Groups["optional"].Value;
             }
         }
 

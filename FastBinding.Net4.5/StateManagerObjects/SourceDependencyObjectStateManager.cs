@@ -9,6 +9,7 @@ namespace FastBindings.StateManagerObjects
     {
         private readonly WeakReference _sourceObjectRef;
         private readonly WeakReference _sourcePropertyRef;
+        private readonly string _optionalPath;
         private readonly WeakEventPublisher<object> _propertyUpdatedPublisher = new WeakEventPublisher<object>();
         private bool _isSubscribed;
 
@@ -21,11 +22,12 @@ namespace FastBindings.StateManagerObjects
             remove { _propertyUpdatedPublisher.Unsubscribe(value); }
         }
 
-        public SourceDependencyObjectStateManager(DependencyProperty sourceProperty, DependencyObject targetObject)
+        public SourceDependencyObjectStateManager(DependencyProperty sourceProperty, DependencyObject targetObject, string optional)
         {
             _sourcePropertyRef = new WeakReference(sourceProperty);
             _sourceObjectRef = new WeakReference(targetObject);
             _lazyPropertyInfoResult = new Lazy<PropertyInfoResult>(GetPropertyInfo, false);
+            _optionalPath = optional;
         }
 
         private PropertyInfoResult GetPropertyInfo()
@@ -37,7 +39,7 @@ namespace FastBindings.StateManagerObjects
                 return new PropertyInfoResult();
             }
 
-            return PropertyUtility.BildPropertyInfo(source, property.Name);
+            return ReflectionUtility.BildPropertyInfo(source, property.Name);
         }
 
         public object GetSourceProperty(object dataContext, bool isWrapException)
@@ -55,15 +57,9 @@ namespace FastBindings.StateManagerObjects
             }
             return ExceptionUtility.Handle(() =>
             {
-                _updatingDependObj = true;
-                try
-                {
-                    return source.GetValue(property);
-                }
-                finally
-                {
-                    _updatingDependObj = false;
-                }
+                var result = source.GetValue(property);
+                return string.IsNullOrEmpty(_optionalPath) ||
+                      CommonViewModelTreeHelper.TryCalculateValue(_optionalPath, ref result) ? result : null;
             }, isWrapException, StateManagerFactory.ErrorMessage);
         }
 
@@ -78,20 +74,28 @@ namespace FastBindings.StateManagerObjects
             var source = _sourceObjectRef.Target as DependencyObject;
             var property = _sourcePropertyRef.Target as DependencyProperty;
 
-            if (source == null || property == null || property.PropertyType != value?.GetType())
+            if (source == null || property == null || !ReflectionUtility.IsValidType(value, property.PropertyType))
             {
                 return;
             }
 
-            _updatingDependObj = true;
-            try
+            ExceptionUtility.Handle(() =>
             {
-                source.SetValue(property, value);
-            }
-            finally
-            {
-                _updatingDependObj = false;
-            }
+                _updatingDependObj = true;
+                try
+                {
+                    if (string.IsNullOrEmpty(_optionalPath))
+                    {
+                        source.SetValue(property, value);
+                        return true;
+                    }
+                    return CommonViewModelTreeHelper.TrySetValue(_optionalPath, source.GetValue(property), value);
+                }
+                finally
+                {
+                    _updatingDependObj = false;
+                }
+            }, true, StateManagerFactory.ErrorMessage);
         }
 
         public void Subscribe(object dataContext)
@@ -128,7 +132,16 @@ namespace FastBindings.StateManagerObjects
             {
                 return;
             }
-            _propertyUpdatedPublisher.RaiseEvent(this, source.GetValue(property));
+            if (source != null && property != null)
+            {
+                var ans = ExceptionUtility.Handle(() =>
+                {
+                    var result = source.GetValue(property);
+                    return string.IsNullOrEmpty(_optionalPath) ||
+                          CommonViewModelTreeHelper.TryCalculateValue(_optionalPath, ref result) ? result : null;
+                }, true, StateManagerFactory.ErrorMessage);
+                _propertyUpdatedPublisher.RaiseEvent(this, ans);
+            }
         }
     }
 }

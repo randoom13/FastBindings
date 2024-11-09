@@ -11,26 +11,31 @@
 	  <Description>Advanced Bindings</Description>
 	  <Authors>Chronos</Authors>
 	  <Owners>O.Kl</Owners>
-	  <Version>1.1.1</Version>
+         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+	  <Version>1.1.5</Version>
 	  <RepositoryUrl>https://github.com/randoom13/FastBindings</RepositoryUrl>
   </PropertyGroup>
-	<PropertyGroup Condition="'$(TargetFramework)' == 'net5.0'">
-		<LangVersion>8.0</LangVersion>
-		<Nullable>enable</Nullable>
-		<!-- Enable nullable reference types for .NET 5.0 -->
-	</PropertyGroup>
-	<PropertyGroup Condition="'$(TargetFramework)' == 'net4.5'">
-		<LangVersion>7.3</LangVersion>
-		<!-- Set to C# 7.3 for .NET Framework 4.5 -->
-		<Nullable>disable</Nullable>
-		<!-- Ensure nullable is disabled -->
-	</PropertyGroup>
+	<ItemGroup>
+		<!-- Reference for .NET Framework 4.5 -->
+		<Reference Include="FastBinding.Net4.5">
+			<HintPath>..\FastBinding.Net4.5\bin\Release\FastBinding.Net4.5.dll</HintPath>
+			<Private>true</Private>
+			<!-- Ensure it's copied to the output directory during build -->
+		</Reference>
+
+		<!-- Reference for .NET 5 -->
+		<Reference Include="FastBinding.Net5">
+			<HintPath>..\FastBinding.Net5\bin\Release\net5.0-windows\FastBinding.Net5.dll</HintPath>
+			<Private>true</Private>
+			<!-- Ensure it's copied to the output directory during build -->
+		</Reference>
+	</ItemGroup>
 <ItemGroup>
   <None Update="..\FastBinding.Net5\bin\Release\net5.0-windows\FastBinding.Net5.dll">
     <Pack>true</Pack>
     <PackagePath>lib\net5.0\</PackagePath>
   </None>
-  <None Update="..\FastBinding.Net4.5\bin\Release\net5.0-windows\FastBinding.Net4.5.dll">
+  <None Update="..\FastBinding.Net4.5\bin\Release\FastBinding.Net4.5.dll">
     <Pack>true</Pack>
     <PackagePath>lib\net4.5\</PackagePath>
   </None>

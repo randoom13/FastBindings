@@ -22,33 +22,33 @@ namespace FastBindings.Common
     {
         public object? GetProperty(string propertyName)
         {
-            _propertyAccessor = _propertyAccessor ?? AccessorHelper.GetPropertyAccessor<T>();
+            _propertyAccessor = _propertyAccessor ?? MembersHelper.GetPropertyAccessor<T>();
             return _propertyAccessor.GetProperty(this, propertyName);
         }
 
         public void SetProperty(string propertyName, object? value)
         {
-            _propertyAccessor = _propertyAccessor ?? AccessorHelper.GetPropertyAccessor<T>();
+            _propertyAccessor = _propertyAccessor ?? MembersHelper.GetPropertyAccessor<T>();
             _propertyAccessor.SetProperty(this, propertyName, value);
         }
 
-        private PropertyAccessor<T>? _propertyAccessor;
+        private PropertyAccessor? _propertyAccessor;
     }
 
     public abstract class CommonBaseViewModel<T> : BaseViewModel
     {
         public override object? GetProperty(string propertyName)
         {
-            _propertyAccessor = _propertyAccessor ?? AccessorHelper.GetPropertyAccessor<T>();
+            _propertyAccessor = _propertyAccessor ?? MembersHelper.GetPropertyAccessor<T>();
             return _propertyAccessor.GetProperty(this, propertyName);
         }
 
         public override void SetProperty(string propertyName, object? value)
         {
-            _propertyAccessor = _propertyAccessor ?? AccessorHelper.GetPropertyAccessor<T>();
+            _propertyAccessor = _propertyAccessor ?? MembersHelper.GetPropertyAccessor<T>();
             _propertyAccessor.SetProperty(this, propertyName, value);
         }
 
-       private PropertyAccessor<T>? _propertyAccessor;
+       private PropertyAccessor? _propertyAccessor;
     }
 }

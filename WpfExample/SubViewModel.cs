@@ -2,14 +2,34 @@
 using FastBindings.Interfaces;
 using FastBindings.StateManagerObjects;
 using System;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 
 namespace WpfExample
 {
-    public class SubViewModel : CommonBaseViewModel<SubViewModel>, IForwardValueConverter, IBackValueConverter, INotificationFilter
+    public class SubViewModel : //CommonBaseViewModel<SubViewModel>, 
+        IForwardValueConverter, IBackValueConverter, INotificationFilter,
+      INotifyPropertyChanged
     {
+        // This event is part of the INotifyPropertyChanged interface
+        public event PropertyChangedEventHandler? PropertyChanged;
+        // Method to raise the PropertyChanged event
+        protected void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        private object? _incoming = null;
+        public object? Incoming
+        {
+            set
+            {
+                _incoming = value;
+            }
+        }
+
         public void Notify(NotificationArgs args)
         {
             if (!args.IsUpdating)
@@ -92,14 +112,14 @@ namespace WpfExample
         {
             var args = arg as EventInfoArgs;
             if (args == null)
-              return arg?.ToString() ?? string.Empty;
+                return arg?.ToString() ?? string.Empty;
 
             return (args.EventArgs as SizeChangedEventArgs)?.NewSize.Height.ToString() ?? string.Empty;
         }
 
         public object Convert(string? converterName, ConverterArgs args)
         {
-            var vals = args.Values?.Select(ArgumentCoverter).OfType<string>().ToList() 
+            var vals = args.Values?.Select(ArgumentCoverter).OfType<string>().ToList()
                 ?? Enumerable.Empty<string>();
             return string.Concat(vals);
         }

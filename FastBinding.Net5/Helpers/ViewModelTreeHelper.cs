@@ -1,87 +1,86 @@
-﻿using FastBindings.Interfaces;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace FastBindings.Helpers
 {
-    public class ViewModelPropertyInfo
-    { 
+    public class ViewModelPropertyInfo<T>
+    {
         public string Name { get; private set; }
-        public IPropertyAccessor Accessor { get; private set; }
+        public T Accessor { get; private set; }
 
-        internal ViewModelPropertyInfo(IPropertyAccessor accessor, string name)
+        internal ViewModelPropertyInfo(T accessor, string name)
         {
             Name = name;
             Accessor = accessor;
         }
     }
 
-    internal static class ViewModelTreeHelper
+    public interface IViewModelTreeHelper<T>
     {
+        object? GetFinalViewModel(object? propertyAccessor, string fullPropertyPath);
+        object? GetFinalViewModelEx(object? propertyAccessor, string fullPropertyPath);
+        IEnumerable<ViewModelPropertyInfo<T>> CalculateSubscribers(string propertyName, object? dataContext);
+        object? GetViewModelProperty(string propertyName, object? dataContext);
+        Type? GetViewModelPropertyType(string propertyName, object? dataContext);
+        void SetViewModelProperty(string propertyName, object? dataContext, object? value);
+    }
+
+    internal static class CommonViewModelTreeHelper
+    {
+        public static bool SetViewModelProperty(string propertyName, object? dataContext, object? value)
+        {
+            if (string.IsNullOrEmpty(propertyName) || propertyName[propertyName.Length - 1] != MethodMark || dataContext == null)
+                return false;
+
+            var acccesor = MembersHelper.GetMethodAccessor(dataContext.GetType());
+            acccesor.InvokeMethod(dataContext, propertyName.Substring(0, propertyName.Length - 1), value);
+            return true;
+        }
+
         public const string PropertyLevelMark = ".";
 
-        public static bool Contains(IPropertyAccessor? propertyAccessor, string fullPropertyPath, object checkingViewModel, string checkingPropertyName) 
-        {
-            return GetPropertyInfos(propertyAccessor, fullPropertyPath).Any(it => ReferenceEquals(checkingViewModel, it.Accessor)
-                && checkingPropertyName == it.Name);
-        }
+        private const char MethodMark = '(';
 
-        public static IPropertyAccessor? GetFinalViewModel(IPropertyAccessor? propertyAccessor, string fullPropertyPath) 
+        public static bool TryCalculateValue(string propertyPath, ref object? target)
         {
-            var item = GetPropertyInfos(propertyAccessor, fullPropertyPath).LastOrDefault();
-            if (item == null)
+            object? propertyAccessor = target;
+            foreach (var propertyName in propertyPath.Split(new[] { PropertyLevelMark }, StringSplitOptions.RemoveEmptyEntries))
             {
-                return null;
+                if (propertyAccessor == null)
+                {
+                    target = null;
+                    return false;
+                }
+
+                var info = MembersHelper.GetPropertyAccessor(propertyAccessor.GetType());
+                propertyAccessor = info.GetProperty(propertyAccessor, propertyName);
             }
-            return item.Accessor?.GetProperty(item.Name) as IPropertyAccessor;
+            target = propertyAccessor;
+            return true;
         }
 
-        public static IEnumerable<ViewModelPropertyInfo> GetPropertyInfos(IPropertyAccessor? propertyAccessor, string propertyPath)
+        public static bool TrySetValue(string propertyPath, object? target, object? value)
         {
-            if (propertyAccessor == null)
-                yield break;
-
-            var splittenPropertyPath = propertyPath.Split(new[] { PropertyLevelMark }, StringSplitOptions.RemoveEmptyEntries);
-
-            for (int index = 0; index < splittenPropertyPath.Length; index++)
+            object? propertyAccessor = target;
+            var properties = propertyPath.Split(new[] { PropertyLevelMark }, StringSplitOptions.RemoveEmptyEntries);
+            for (int index = 0; index < properties.Length; index++)
             {
-                string propertyName = splittenPropertyPath.ElementAt(index);
-                yield return new ViewModelPropertyInfo(propertyAccessor!, propertyName);
-                if (index != splittenPropertyPath.Length - 1)
-                    propertyAccessor = propertyAccessor?.GetProperty(propertyName) as IPropertyAccessor;
+                if (propertyAccessor == null)
+                {
+                    target = null;
+                    return false;
+                }
+                var propertyName = properties.ElementAt(index);
+                var info = MembersHelper.GetPropertyAccessor(propertyAccessor.GetType());
+                if (index == properties.Length - 1)
+                {
+                    info.SetProperty(propertyAccessor, propertyName, value);
+                    return true;
+                }
+                propertyAccessor = info.GetProperty(propertyAccessor, propertyName);
             }
-        }
-
-        public static IEnumerable<ViewModelPropertyInfo> CalculateSubscribers(string propertyName, object? dataContext)
-        {
-            return GetPropertyInfos(dataContext as IPropertyAccessor, propertyName);
-        }
-
-        public static object? GetViewModelProperty(string propertyName, IPropertyAccessor? propertyAccessor)
-        {
-            if (propertyAccessor == null)
-                return null;
-
-            var item = GetPropertyInfos(propertyAccessor, propertyName).LastOrDefault();
-            if (item == null) 
-            {
-                return null;
-            }
-            return item?.Accessor?.GetProperty(item.Name);
-        }
-
-        public static void SetViewModelProperty(string propertyName, IPropertyAccessor? propertyAccessor, object? value)
-        {
-            if (propertyAccessor == null)
-                return;
-
-            var item = GetPropertyInfos(propertyAccessor, propertyName).LastOrDefault();
-            if (item == null)
-            {
-                return;
-            }
-            item.Accessor?.SetProperty(item.Name, value);
+            return false;
         }
     }
 }

@@ -1,14 +1,17 @@
-﻿using System;
+﻿using FastBindings.BindingManagers;
+using FastBindings.Helpers;
+using FastBindings.Interfaces;
+using System;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Markup;
-using FastBindings.Interfaces;
 
 namespace FastBindings
 {
-    public class FastBinding : MarkupExtension
+    public class FastBinding : BaseBinding
     {
-        private readonly FastBindingUpdateManager _updateManager = new FastBindingUpdateManager();
+        private readonly BindingUpdateManager<IPropertyAccessor> _updateManager
+           = new BindingUpdateManager<IPropertyAccessor>(new FastViewModelTreeHelper());
 
         [DefaultValue(null)]
         public string? NotificationPath
@@ -85,9 +88,6 @@ namespace FastBindings
             set => _updateManager.Converter = value;
         }
 
-        [DefaultValue(CacheStrategy.None)]
-        public CacheStrategy CacheStrategy { get; set; }
-
         // Constructor
         public FastBinding()
         {
@@ -110,10 +110,22 @@ namespace FastBindings
                 return DependencyProperty.UnsetValue;
 
             var targetObject = valueTarget?.TargetObject as DependencyObject;
+
             if (targetObject == null)
                 return DependencyProperty.UnsetValue;
 
-            return _updateManager.Initialize(targetObject, targetProperty, CacheStrategy);
+            if (_updateManager.CanSubscribeOnDataContext(targetObject))
+            {
+                return _updateManager.Initialize(targetObject, targetProperty, CacheStrategy);
+            }
+            PrepareInitialization(serviceProvider, targetObject, targetProperty);
+            return _updateManager.GetDefaultValue(targetProperty);
+        }
+
+        internal override void LazyInitialization(DependencyObject targetObject, DependencyProperty targetProperty,
+    DependencyObject? dataContextObj)
+        {
+            _updateManager.InitializeAndRefresh(targetObject, targetProperty, CacheStrategy, dataContextObj);
         }
     }
 }

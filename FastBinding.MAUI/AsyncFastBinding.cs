@@ -1,12 +1,15 @@
 ﻿using System.ComponentModel;
+using FastBindings.Helpers;
 using FastBindings.Interfaces;
+using FastBindings.BindingManagers;
 
 namespace FastBindings
 {
     [ContentProperty(nameof(Sources))]
-    public class AsyncFastBinding : IMarkupExtension
+    public class AsyncFastBinding : BaseBinding
     {
-        private AsyncFastBindingUpdateManager _updateManager = new AsyncFastBindingUpdateManager();
+        private readonly AsyncBindingUpdateManager<IPropertyAccessor> _updateManager =
+    new AsyncBindingUpdateManager<IPropertyAccessor>(new FastViewModelTreeHelper());
 
         [DefaultValue(null)]
         public string? NotificationPath
@@ -83,40 +86,27 @@ namespace FastBindings
             get => _updateManager.Converter;
             set => _updateManager.Converter = value;
         }
-
-        [DefaultValue(CacheStrategy.None)]
-        public CacheStrategy CacheStrategy { get; set; }
-
-        public object? ProvideValue(IServiceProvider serviceProvider)
+        public override object? ProvideValue(IServiceProvider serviceProvider)
         {
             if (string.IsNullOrEmpty(Sources))
                 return BindableProperty.UnsetValue;
 
-            var valueTarget = serviceProvider.GetService(typeof(IProvideValueTarget)) as IProvideValueTarget;
-            var targetProperty = valueTarget?.TargetProperty as BindableProperty;
-            if (targetProperty == null)
-                return BindableProperty.UnsetValue;
-
-            var targetObject = valueTarget?.TargetObject as BindableObject;
-            if (targetObject == null)
-                return BindableProperty.UnsetValue;
-
-            // Unfortunatelly any binding on another dependency object without it does not work
-            _updateManager.ApplyTargets(targetObject, targetProperty);
-            var visualElement = targetObject as VisualElement;
-            if (visualElement != null)
-                visualElement.Loaded += OnTargetLoaded;
-
-            return targetProperty.DefaultValue;
+            return base.ProvideValue(serviceProvider);
         }
 
-        private void OnTargetLoaded(object? sender, EventArgs? args)
+        internal override void ApplyTargets(BindableObject targetObject, BindableProperty targetProperty,
+            BindableObject? anchorObject)
+        {
+            _updateManager.ApplyTargets(targetObject, targetProperty, anchorObject);
+        }
+
+        internal override void OnTargetLoaded(object? sender, EventArgs? args)
         {
             var element = sender as VisualElement;
             if (element != null)
             {
                 element.Loaded -= OnTargetLoaded;
-                _updateManager.Initialize(this, CacheStrategy);
+                _updateManager.Initialize(this,CacheStrategy);
             }
         }
     }

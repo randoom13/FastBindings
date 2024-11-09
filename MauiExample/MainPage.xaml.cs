@@ -14,7 +14,7 @@
         {
             var model = BindingContext as MainWindowViewModel;
             model!.Mod.MyProperty = Guid.NewGuid().ToString();
-
+            model!.Color = model!.Color == Colors.Green ? Colors.Red : Colors.Green;
             count++;
 
             if (count == 1)

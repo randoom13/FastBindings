@@ -17,7 +17,7 @@ namespace FastBindings.Helpers
 
         public static async Task<object?> GetResult(Task value)
         {
-            await ((Task)value!);
+            await value;
             var type = value.GetType();
             PropertyInfo? propertyInfo = type.GetProperty("Result");
             var result = propertyInfo?.GetValue(value);

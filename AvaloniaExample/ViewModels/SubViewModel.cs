@@ -2,13 +2,23 @@
 using FastBindings.Interfaces;
 using FastBindings.StateManagerObjects;
 using System;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 
 namespace AvaloniaExample.ViewModels
 {
-    public class SubViewModel : CommonBaseViewModel<SubViewModel>, IForwardValueConverter, IBackValueConverter, INotificationFilter
+    public class SubViewModel :   INotifyPropertyChanged,//CommonBaseViewModel<SubViewModel>, 
+        IForwardValueConverter, IBackValueConverter, INotificationFilter
     {
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        // Method to raise the PropertyChanged event
+        protected void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
         public void Notify(NotificationArgs args)
         {
             if (!args.IsUpdating)
@@ -30,6 +40,15 @@ namespace AvaloniaExample.ViewModels
         private int minVisiblePosition = 0;
         private string _fullText = @"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Quisque consequat est sit amet nisi tincidunt, vitae tristique purus dictum. Vivamus accumsan, justo a vehicula venenatis, dolor dui blandit libero, at venenatis nisi eros sed nunc. Sed interdum aliquam libero, nec dapibus nunc vehicula a. Suspendisse a mi ut nulla dictum facilisis. Morbi vitae ante eros. Sed eget ligula consectetur, fermentum arcu non, tincidunt est. Nulla facilisi. Integer sit amet venenatis ligula, ut viverra dui. Proin volutpat urna eget libero tempor, a finibus est condimentum. Duis fermentum magna et sollicitudin interdum. Suspendisse potenti.";
         private DateTime initialDateTime;
+
+        private object? _incoming = null;
+        public object? Incoming
+        {
+            set 
+            {
+                _incoming = value;
+            }
+        }
 
         private async Task<string> Tasks(string text)
         {

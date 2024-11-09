@@ -1,4 +1,5 @@
-﻿using System;
+﻿using FastBindings.Helpers;
+using System;
 using System.Reflection;
 using System.Windows;
 
@@ -27,13 +28,12 @@ namespace FastBindings.StateManagerObjects
 
     internal class SourceEventStateManager : ISourceStateManager
     {
+        private readonly string _optional;
         private readonly WeakReference _eventInfoRef;
         private readonly WeakReference _sourcePropertyRef;
         private readonly WeakEventPublisher<object> _propertyUpdatedPublisher = new WeakEventPublisher<object>();
         private WeakReference _subscribedDelegateRef;
-
-        private bool _updatingDependObj = false;
-        private EventInfoArgs _lastValue;
+        private object _lastValue;
 
         public event EventHandlerEx<object> PropertyUpdated
         {
@@ -41,15 +41,54 @@ namespace FastBindings.StateManagerObjects
             remove { _propertyUpdatedPublisher.Unsubscribe(value); }
         }
 
-        public SourceEventStateManager(DependencyObject sourceProperty, EventInfo eventInfo)
+        public SourceEventStateManager(DependencyObject sourceProperty, EventInfo eventInfo, string optional)
         {
             _sourcePropertyRef = new WeakReference(sourceProperty);
             _eventInfoRef = new WeakReference(eventInfo);
+            _optional = optional;
+        }
+
+        private const string PropertyLevelMark = ".";
+        private static bool TryCalculateValue(string propertyPath, ref object result)
+        {
+            var propertyAccessor = result;
+            foreach (var propertyName in propertyPath.Split(new[] { PropertyLevelMark }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (propertyAccessor != null)
+                {
+                    var info = MembersHelper.GetPropertyAccessor(propertyAccessor.GetType());
+                    var res = info.GetProperty(propertyAccessor, propertyName);
+                    if (res == null)
+                    {
+                        result = null;
+                        return false;
+                    }
+                    propertyAccessor = res;
+                }
+            }
+            result = propertyAccessor;
+            return true;
         }
 
         private void OnPropertyChanged(object sender, object args)
         {
-            _lastValue = new EventInfoArgs(sender, args, (_eventInfoRef.Target as EventInfo)?.Name);
+            var copy = new EventInfoArgs(sender, args, (_eventInfoRef.Target as EventInfo)?.Name);
+            _lastValue = copy;
+            if (!string.IsNullOrEmpty(_optional))
+            {
+                try
+                {
+                    if (!TryCalculateValue(_optional, ref _lastValue))
+                        _lastValue = copy;
+                }
+                catch (Exception ex)
+                {
+                    _lastValue = copy;
+                    System.Diagnostics.Debug.WriteLine($"[FastBinding] Failed to calculate value accorting to {_optional}");
+                    System.Diagnostics.Debug.WriteLine($"[FastBinding] {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[FastBinding] {ex.StackTrace}");
+                }
+            }
             _propertyUpdatedPublisher.RaiseEvent(this, _lastValue);
         }
 

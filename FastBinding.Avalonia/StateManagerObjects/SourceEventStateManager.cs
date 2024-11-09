@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using FastBindings.Helpers;
 using System;
 using System.Reflection;
 
@@ -28,10 +29,11 @@ namespace FastBindings.StateManagerObjects
     internal class SourceEventStateManager : ISourceStateManager
     {
         private readonly WeakReference _eventInfoRef;
+        private string? _optional;
         private readonly WeakReference _sourcePropertyRef;
         private readonly WeakEventPublisher<object> _propertyUpdatedPublisher = new WeakEventPublisher<object>();
         private WeakReference? _subscribedDelegateRef;
-        private EventInfoArgs? _lastValue;
+        private object? _lastValue;
 
         public event EventHandler<object> PropertyUpdated
         {
@@ -39,15 +41,32 @@ namespace FastBindings.StateManagerObjects
             remove { _propertyUpdatedPublisher.Unsubscribe(value); }
         }
 
-        public SourceEventStateManager(AvaloniaObject sourceProperty, EventInfo eventInfo)
+        public SourceEventStateManager(AvaloniaObject sourceProperty, EventInfo eventInfo, string? optional)
         {
             _sourcePropertyRef = new WeakReference(sourceProperty);
             _eventInfoRef = new WeakReference(eventInfo);
+            _optional = optional;
         }
 
         private void OnPropertyChanged(object? sender, object? args)
         {
-            _lastValue = new EventInfoArgs(sender, args, (_eventInfoRef.Target as EventInfo)?.Name);
+            var copy = new EventInfoArgs(sender, args, (_eventInfoRef.Target as EventInfo)?.Name);
+            _lastValue = copy;
+            if (!string.IsNullOrEmpty(_optional))
+            {
+                try
+                {
+                    if (!CommonViewModelTreeHelper.TryCalculateValue(_optional, ref _lastValue))
+                        _lastValue = copy;
+                }
+                catch (Exception ex)
+                {
+                    _lastValue = copy;
+                    System.Diagnostics.Debug.WriteLine($"[FastBinding] Failed to calculate value accorting to {_optional}");
+                    System.Diagnostics.Debug.WriteLine($"[FastBinding] {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[FastBinding] {ex.StackTrace}");
+                }
+            }
             _propertyUpdatedPublisher.RaiseEvent(this, _lastValue);
         }
 

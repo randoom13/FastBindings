@@ -1,10 +1,9 @@
-﻿using System;
+﻿using FastBindings.Helpers;
+using System;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
-using FastBindings.Helpers;
-using FastBindings.Interfaces;
 
 namespace FastBindings.StateManagerObjects
 {
@@ -23,7 +22,7 @@ namespace FastBindings.StateManagerObjects
         Task<object?> GetSourcePropertyAsync(object? dataContext, bool isWrapException);
     }
 
-    internal class SourceViewModelStateManager : ISourceStateManager, IAsyncSourceStateManager
+    internal class SourceViewModelStateManager<T> : ISourceStateManager, IAsyncSourceStateManager
     {
         private bool _updatingViewModel = false;
 
@@ -31,6 +30,12 @@ namespace FastBindings.StateManagerObjects
         private readonly WeakReference _targetObjectRef;
         private readonly WeakEventPublisher<object> _propertyUpdatedPublisher = new WeakEventPublisher<object>();
         private readonly string _propertyNamePath;
+        private IViewModelTreeHelper<T>? _treeHelper;
+
+        internal void Initialize(IViewModelTreeHelper<T> treeHelper)
+        {
+            _treeHelper = treeHelper;
+        }
 
         public SourceViewModelStateManager(string propertyName, DependencyObject targetObject,
             DataContextParams dataContextParms)
@@ -51,14 +56,14 @@ namespace FastBindings.StateManagerObjects
         public object? GetSourceProperty(object? dataContext, bool isWrapException)
         {
             return ExceptionUtility.Handle(() =>
-            ViewModelTreeHelper.GetViewModelProperty(_propertyNamePath, dataContext as IPropertyAccessor),
+            _treeHelper?.GetViewModelProperty(_propertyNamePath, dataContext),
             isWrapException, StateManagerFactory.ErrorMessage);
         }
 
         public Task<object?> GetSourcePropertyAsync(object? dataContext, bool isWrapException)
         {
             return ExceptionUtility.AsyncHandle(() =>
-                ViewModelTreeHelper.GetViewModelProperty(_propertyNamePath, dataContext as IPropertyAccessor),
+                _treeHelper?.GetViewModelProperty(_propertyNamePath, dataContext),
                 isWrapException, StateManagerFactory.AsyncErrorMessage);
         }
 
@@ -74,7 +79,7 @@ namespace FastBindings.StateManagerObjects
             _updatingViewModel = true;
             try
             {
-                ViewModelTreeHelper.SetViewModelProperty(_propertyNamePath, initialAccessor, value);
+                _treeHelper?.SetViewModelProperty(_propertyNamePath, initialAccessor, value);
             }
             finally
             {
@@ -82,7 +87,7 @@ namespace FastBindings.StateManagerObjects
             }
         }
 
-        private void OnPropertyChanged(ViewModelPropertyInfo finalPropertyInfo)
+        private void OnPropertyChanged(ViewModelPropertyInfo<T> finalPropertyInfo)
         {
             if (_updatingViewModel || finalPropertyInfo == null)
                 return;
@@ -92,7 +97,7 @@ namespace FastBindings.StateManagerObjects
             {
                 if (Cache == null || !Cache.TryGetCache(finalPropertyInfo, out value))
                 {
-                    value = finalPropertyInfo.Accessor.GetProperty(finalPropertyInfo.Name);
+                    value = _treeHelper?.GetFinalViewModelEx(finalPropertyInfo.Accessor, finalPropertyInfo.Name);
                     Cache?.ApplyCache(finalPropertyInfo, value);
                 }
                 if (!SupportAsync)
@@ -113,7 +118,7 @@ namespace FastBindings.StateManagerObjects
             }
         }
 
-        private async void AwaitAndNotifyAsyncIfRequired(object? value, ViewModelPropertyInfo finalPropertyInfo)
+        private async void AwaitAndNotifyAsyncIfRequired(object? value, ViewModelPropertyInfo<T> finalPropertyInfo)
         {
             try
             {
@@ -134,8 +139,8 @@ namespace FastBindings.StateManagerObjects
 
         public void Subscribe(object? dataContext)
         {
-            var subscribers = ViewModelTreeHelper.CalculateSubscribers(_propertyNamePath, dataContext).ToArray();
-            if (!subscribers.Any() || !subscribers.Any(it => it.Accessor is INotifyPropertyChanged))
+            var subscribers = _treeHelper?.CalculateSubscribers(_propertyNamePath, dataContext).ToArray();
+            if (subscribers == null || !subscribers.Any() || !subscribers.Any(it => it.Accessor is INotifyPropertyChanged))
             {
                 return;
             }
@@ -149,19 +154,19 @@ namespace FastBindings.StateManagerObjects
 
         protected class SubcriberHandlerArgs
         {
-            public SubcriberHandlerArgs(SourceViewModelStateManager manager, ViewModelPropertyInfo finalPropertyInfo)
+            public SubcriberHandlerArgs(SourceViewModelStateManager<T> manager, ViewModelPropertyInfo<T> finalPropertyInfo)
             {
                 _managerRef = new WeakReference(manager);
                 FinalPropertyInfo = finalPropertyInfo;
             }
 
             private readonly WeakReference _managerRef = new WeakReference(null);
-            public SourceViewModelStateManager? Manager => _managerRef.Target as SourceViewModelStateManager;
-            public ViewModelPropertyInfo FinalPropertyInfo { get; private set; }
+            public SourceViewModelStateManager<T>? Manager => _managerRef.Target as SourceViewModelStateManager<T>;
+            public ViewModelPropertyInfo<T> FinalPropertyInfo { get; private set; }
         }
 
         private SubcriberHandlerArgs? _handlerArgs;
-        private static void Subscribe(ViewModelPropertyInfo currentPropertyInfo, SubcriberHandlerArgs handlerArgs)
+        private static void Subscribe(ViewModelPropertyInfo<T> currentPropertyInfo, SubcriberHandlerArgs handlerArgs)
         {
             var currentName = currentPropertyInfo.Name;
             PropertyChangedEventHandler? propertyChangedHandler = null;

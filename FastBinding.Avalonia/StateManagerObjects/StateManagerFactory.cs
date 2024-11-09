@@ -1,7 +1,7 @@
 ﻿using Avalonia;
+using FastBindings.Helpers;
 using System;
 using System.Linq;
-using FastBindings.Helpers;
 
 namespace FastBindings.StateManagerObjects
 {
@@ -11,22 +11,23 @@ namespace FastBindings.StateManagerObjects
         public const string AsyncErrorMessage = "[AsyncFastBinding] An error occurred while attempting to get data from the source property";
 
         private static SourceViewModelCache _cache = new SourceViewModelCache();
-
-        public static ISourceStateManager[] Build(string sources, AvaloniaObject targetObject, 
-            DataContextParams dataContextParams, CacheStrategy cacheStrategy)
+        public static ISourceStateManager[] Build<T>(string sources, AvaloniaObject targetObject,
+            DataContextParams dataContextParams, CacheStrategy strategy, IViewModelTreeHelper<T> treeHelper)
         {
-            if (string.IsNullOrEmpty(sources)) 
+            if (string.IsNullOrEmpty(sources))
             {
                 throw new ArgumentException($"{nameof(sources)}");
             }
-            var cache = cacheStrategy == CacheStrategy.Simple ? _cache : null;
+            ICache? cache = strategy == CacheStrategy.Simple ? _cache : null;
+            var obj = dataContextParams.AnchorObject ?? targetObject;
             return sources.Split(new string[] { PropertyPathParser.PropertiesDevider },
                     StringSplitOptions.RemoveEmptyEntries).
                           Select(property =>
                           {
                               try
                               {
-                                  return Parse(property.Trim(), targetObject, dataContextParams, cache);
+                                  return Parse<T>(property.Trim(), obj, dataContextParams,
+                                      cache, treeHelper);
                               }
                               catch (Exception ex)
                               {
@@ -35,15 +36,19 @@ namespace FastBindings.StateManagerObjects
                           }).
                 ToArray();
         }
-   
-        private static ISourceStateManager Parse(string property, AvaloniaObject targetObject, DataContextParams dataContextParams,
-             ICache? cache)
+
+        private static ISourceStateManager Parse<T>(string property, AvaloniaObject targetObject, DataContextParams dataContextParams,
+             ICache? cache, IViewModelTreeHelper<T> treeHelper)
         {
             if (string.IsNullOrEmpty(property))
                 throw new ArgumentException(nameof(property));
 
             if (!PropertyPathParser.NeedApply(property))
-                return new SourceViewModelStateManager(property, targetObject, dataContextParams) { Cache = cache };
+            {
+                var manager = new SourceViewModelStateManager<T>(property, targetObject, dataContextParams) { Cache = cache };
+                manager.Initialize(treeHelper);
+                return manager;
+            }
 
             var propertyPathParser = new PropertyPathParser(property);
             if (!propertyPathParser.IsValid)
@@ -57,15 +62,15 @@ namespace FastBindings.StateManagerObjects
             }
             try
             {
-                var dependencyProperty = PropertyUtility.FindDependencyPropertyByName(child, propertyPathParser.Property!);
+                var dependencyProperty = ReflectionUtility.FindDependencyPropertyByName(child, propertyPathParser.Property!);
                 if (dependencyProperty != null)
                 {
-                    return new SourceDependencyObjectStateManager(dependencyProperty, child) ;
+                    return new SourceDependencyObjectStateManager(dependencyProperty, child, propertyPathParser.Optional);
                 }
-                var trackingEvent = PropertyUtility.FindEventByName(child, propertyPathParser.Property!);
-                if (trackingEvent != null) 
+                var trackingEvent = ReflectionUtility.FindEventByName(child, propertyPathParser.Property!);
+                if (trackingEvent != null)
                 {
-                    return new SourceEventStateManager(child, trackingEvent);
+                    return new SourceEventStateManager(child, trackingEvent, propertyPathParser.Optional);
                 }
             }
             catch (Exception ex)
@@ -75,10 +80,10 @@ namespace FastBindings.StateManagerObjects
             throw BuildException(propertyPathParser);
         }
 
-        private static Exception BuildException(PropertyPathParser parser, Exception? exception = null) 
+        private static Exception BuildException(PropertyPathParser parser, Exception? exception = null)
         {
             var message = $"[FastBinding] Could not find {parser.Property} on control {parser.Source}.";
-            throw exception == null? new InvalidOperationException(message) : new InvalidOperationException(message, exception);
+            throw exception == null ? new InvalidOperationException(message) : new InvalidOperationException(message, exception);
         }
     }
 }

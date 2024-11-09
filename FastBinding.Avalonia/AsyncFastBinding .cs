@@ -1,15 +1,17 @@
 ﻿using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
+using FastBindings.BindingManagers;
+using FastBindings.Helpers;
 using FastBindings.Interfaces;
 using System;
 using System.ComponentModel;
 
 namespace FastBindings
 {
-    public class AsyncFastBinding : AvaloniaObject
+    public class AsyncFastBinding : BaseBinding
     {
-        private readonly AsyncFastBindingUpdateManager _updateManager = new AsyncFastBindingUpdateManager();
+        private readonly AsyncBindingUpdateManager<IPropertyAccessor> _updateManager = 
+            new AsyncBindingUpdateManager<IPropertyAccessor>(new FastViewModelTreeHelper());
 
         [DefaultValue(null)]
         public string? NotificationPath
@@ -87,9 +89,6 @@ namespace FastBindings
             set => _updateManager.Converter = value;
         }
 
-        [DefaultValue(CacheStrategy.None)]
-        public CacheStrategy CacheStrategy { get; set; }
-
         public AsyncFastBinding()
         {
         }
@@ -99,37 +98,27 @@ namespace FastBindings
             Sources = sources?.Trim() ?? string.Empty;
         }
 
-        public object? ProvideValue(IServiceProvider serviceProvider)
+        public override object? ProvideValue(IServiceProvider serviceProvider)
         {
             if (string.IsNullOrEmpty(Sources))
                 return AvaloniaProperty.UnsetValue;
 
-            var valueTarget = serviceProvider.GetService(typeof(IProvideValueTarget)) as IProvideValueTarget;
-            var targetProperty = valueTarget?.TargetProperty as AvaloniaProperty;
-            if (targetProperty == null)
-                return AvaloniaProperty.UnsetValue;
+            return base.ProvideValue(serviceProvider);
+        }
 
-            var targetObject = valueTarget?.TargetObject as AvaloniaObject;
-            if (targetObject == null)
-                return AvaloniaProperty.UnsetValue;
-
-            var element = targetObject as Control;
-            if (element != null)
-            {
-                element.Loaded += OnTargetLoaded;
-                _updateManager.ApplyTargets(targetObject, targetProperty);
-            }
-            return null;
+        internal override void ApplyTarget(AvaloniaObject targetObject, AvaloniaProperty targetProperty, AvaloniaObject? dataContextObj)
+        {
+            _updateManager.ApplyTargets(targetObject, targetProperty, dataContextObj);
         }
 
         // Switch to lazy loading to avoid issues with binding to a ListBox from any object in the DataTemplate
-        private void OnTargetLoaded(object? sender, EventArgs? args)
+        internal override void OnTargetLoaded(object? sender, EventArgs? args)
         {
             var element = sender as Control;
             if (element != null)
             {
                 element.Loaded -= OnTargetLoaded;
-                _updateManager.Initialize(this, CacheStrategy);
+                _updateManager.Initialize(this,CacheStrategy);
             }
         }
     }

@@ -5,27 +5,29 @@ namespace FastBindings.StateManagerObjects
 {
     internal interface ICache
     {
-        bool TryGetCache(ViewModelPropertyInfo finalPropertyInfo, out object? result);
-        void ApplyCache(ViewModelPropertyInfo finalPropertyInfo, object? value);
+        bool TryGetCache<T>(ViewModelPropertyInfo<T> finalPropertyInfo, out object? result);
+        void ApplyCache<T>(ViewModelPropertyInfo<T> finalPropertyInfo, object? value);
         void Clear();
-        void PrepareCache(ViewModelPropertyInfo finalPropertyInfo, object? sender, PropertyChangedEventArgs args);
+        void PrepareCache<T>(ViewModelPropertyInfo<T> finalPropertyInfo, object? sender, PropertyChangedEventArgs args);
     }
 
     internal class SourceViewModelCache : ICache
     {
-        private ViewModelPropertyInfo? _finalPropertyInfo;
+        private object? _accessor;
+        private string? _name;
+
         private object? _value;
         private bool _hasValue = false;
         private object? _sessionKey;
 
-        public bool TryGetCache(ViewModelPropertyInfo finalPropertyInfo, out object? result)
+        public bool TryGetCache<T>(ViewModelPropertyInfo<T> finalPropertyInfo, out object? result)
         {
             var hasValue = _hasValue && _sessionKey != null && IsSame(finalPropertyInfo);
             result = hasValue ? _value : null;
             return hasValue;
         }
 
-        public void ApplyCache(ViewModelPropertyInfo finalPropertyInfo, object? value)
+        public void ApplyCache<T>(ViewModelPropertyInfo<T> finalPropertyInfo, object? value)
         {
             if (!_hasValue && _sessionKey != null && IsSame(finalPropertyInfo))
             {
@@ -36,17 +38,18 @@ namespace FastBindings.StateManagerObjects
 
         public void Clear()
         {
-            _finalPropertyInfo = null;
+            _name = null;
+            _accessor = null;
             _value = null;
             _hasValue = false;
             _sessionKey = null;
         }
 
-        private bool IsSame(ViewModelPropertyInfo finalPropertyInfo) =>
-         ReferenceEquals(finalPropertyInfo.Accessor, _finalPropertyInfo?.Accessor)
-               && finalPropertyInfo.Name == _finalPropertyInfo?.Name;
+        private bool IsSame<T>(ViewModelPropertyInfo<T> finalPropertyInfo) =>
+         ReferenceEquals(finalPropertyInfo.Accessor, _accessor)
+               && finalPropertyInfo.Name == _name;
 
-        public void PrepareCache(ViewModelPropertyInfo finalPropertyInfo, object? sender, PropertyChangedEventArgs args)
+        public void PrepareCache<T>(ViewModelPropertyInfo<T> finalPropertyInfo, object? sender, PropertyChangedEventArgs args)
         {
             if (!ReferenceEquals(sender, finalPropertyInfo.Accessor))
             {
@@ -63,7 +66,8 @@ namespace FastBindings.StateManagerObjects
             {
                 Clear();
                 _sessionKey = args;
-                _finalPropertyInfo = finalPropertyInfo;
+                _name = null;
+                _accessor = null;
             }
         }
     }
