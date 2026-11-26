@@ -7,6 +7,7 @@ using FastBindings.BindingManagers;
 using FastBindings.Helpers;
 using FastBindings.Interfaces;
 using System;
+using System.Runtime.CompilerServices;
 using System.ComponentModel;
 using System.Linq;
 
@@ -17,6 +18,7 @@ namespace FastBindings
         [DefaultValue(CacheStrategy.None)]
         public CacheStrategy CacheStrategy { get; set; }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public virtual object? ProvideValue(IServiceProvider serviceProvider)
         {
             var valueTarget = serviceProvider.GetService(typeof(IProvideValueTarget)) as IProvideValueTarget;
@@ -49,13 +51,48 @@ namespace FastBindings
                 if (visualElement.IsAttachedToVisualTree())
                     OnTargetLoaded(visualElement, EventArgs.Empty);
                 else
+                {
                     visualElement.AttachedToVisualTree += OnTargetAttached;
+                    // A plain binding (a path from the DataContext, on the control itself) starts as soon as the control has a
+                    // DataContext, like a compiled binding: a view whose DataContext is set before it joins the window gets its
+                    // values while nothing is attached yet, when a change invalidates nothing. Not inside ProvideValue: what it
+                    // returns is assigned to the property after it, over anything set there.
+                    if (anchorObj == null && StartsWithDataContext)
+                        visualElement.DataContextChanged += OnTargetDataContext;
+                }
             }
             return AvaloniaProperty.UnsetValue;
         }
 
+        /// <summary>Whether this binding may start on its control's first DataContext change, before it joins the visual tree.</summary>
+        internal virtual bool StartsWithDataContext => false;
+
+        private bool _started;
+
+        private void OnTargetDataContext(object? sender, EventArgs e)
+        {
+            if (sender is Control control && control.DataContext != null)
+                Start(control);
+        }
+
+        private void Start(Control control)
+        {
+            control.AttachedToVisualTree -= OnTargetAttached;
+            control.DataContextChanged -= OnTargetDataContext;
+            if (_started)
+                return;
+            _started = true;
+            OnTargetLoaded(control, EventArgs.Empty);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnTargetAttached(object? sender, VisualTreeAttachmentEventArgs e)
         {
+            if (sender is Control control)
+            {
+                Start(control);
+                return;
+            }
             if (sender is Visual visual)
                 visual.AttachedToVisualTree -= OnTargetAttached;
             OnTargetLoaded(sender, e);
@@ -162,6 +199,7 @@ namespace FastBindings
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public override object? ProvideValue(IServiceProvider serviceProvider)
         {
             if (string.IsNullOrEmpty(Sources))
@@ -170,12 +208,17 @@ namespace FastBindings
             return base.ProvideValue(serviceProvider);
         }
 
+        // a path from the DataContext and nothing that reads the tree: no $[[...]] source, no DataContextSource
+        internal override bool StartsWithDataContext =>
+            !PropertyPathParser.NeedApply(Sources) && string.IsNullOrEmpty(DataContextSource);
+
         internal override void ApplyTarget(AvaloniaObject targetObject, AvaloniaProperty targetProperty, AvaloniaObject? dataContextObj)
         {
             _updateManager.ApplyTargets(targetObject, targetProperty, dataContextObj);
         }
 
         // Switch to lazy loading to avoid issues with binding to a ListBox from any object in the DataTemplate
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         internal override void OnTargetLoaded(object? sender, EventArgs? args)
         {
             var element = sender as Control;
