@@ -1,6 +1,8 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Data;
 using System;
+using FastBindings;
+using System.Runtime.CompilerServices;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Linq.Expressions;
@@ -30,6 +32,7 @@ namespace FastBindings.BindingManagers
             && m.GetParameters()[0].ParameterType.IsGenericType
             && m.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(DirectPropertyBase<>));
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static Action<AvaloniaObject, object>? For(Type sourceType, string name, AvaloniaProperty property)
         {
             var key = (sourceType, name, property);
@@ -48,6 +51,12 @@ namespace FastBindings.BindingManagers
                 var to = key.Property.PropertyType;
                 if (!to.IsAssignableFrom(info.PropertyType))
                     return null;   // the slow path's IsValidType would refuse or decide per value: keep it there
+                // a delegate to the getter, typed by its covariant return: nothing to compile (FastAccessors)
+                if (FastBindings.Helpers.FastAccessors.Pusher(info, key.Property) is { } fast)
+                {
+                    FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._delegates);
+                    return fast;
+                }
                 var target = Expression.Parameter(typeof(AvaloniaObject), "target");
                 var source = Expression.Parameter(typeof(object), "source");
                 Expression value = Expression.Property(Expression.Convert(source, key.Source), info);
@@ -62,7 +71,7 @@ namespace FastBindings.BindingManagers
                     call = Expression.Call(target, SetDirect.MakeGenericMethod(to), Expression.Constant(key.Property, direct), value);
                 else
                     return null;
-                return Expression.Lambda<Action<AvaloniaObject, object>>(Expression.Block(typeof(void), call), target, source).Compile();
+                return FastBindingsDiagnostics.Compile(Expression.Lambda<Action<AvaloniaObject, object>>(Expression.Block(typeof(void), call), target, source));
             }
             catch (Exception ex)
             {
