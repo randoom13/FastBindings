@@ -1,6 +1,7 @@
 ﻿using Avalonia;
 using FastBindings.Helpers;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -137,15 +138,22 @@ namespace FastBindings.StateManagerObjects
 
         public void Subscribe(object? dataContext)
         {
+            RemoveSubscriptions();
+            _dataContext = dataContext;
             var subscribers = _viewModelTree?.CalculateSubscribers(_propertyNamePath, dataContext)?.ToArray();
-            if (subscribers == null || !subscribers.Any() || !subscribers.Any(it => it.Accessor is INotifyPropertyChanged))
+            if (subscribers == null || subscribers.Length == 0)
             {
                 return;
             }
-            _handlerArgs = new SubscriberHandlerArgs(this, subscribers.Last());
-            foreach (var propertyInfo in subscribers.Where(it => it.Accessor is INotifyPropertyChanged))
+            _handlerArgs = new SubscriberHandlerArgs(this, subscribers[subscribers.Length - 1]);
+            for (var index = 0; index < subscribers.Length; index++)
             {
-                Subscribe(propertyInfo, _handlerArgs);
+                if (subscribers[index].Accessor is INotifyPropertyChanged source)
+                {
+                    var subscription = new Subscription(_handlerArgs, subscribers[index].Name, isLast: index == subscribers.Length - 1);
+                    source.PropertyChanged += subscription.OnPropertyChanged;
+                    _subscriptions.Add((source, subscription));
+                }
             }
         }
 
@@ -162,47 +170,70 @@ namespace FastBindings.StateManagerObjects
             public ViewModelPropertyInfo<T> FinalPropertyInfo { get; private set; }
         }
 
-        private SubscriberHandlerArgs? _handlerArgs;
-        private static void Subscribe(ViewModelPropertyInfo<T> currentPropertyInfo, SubscriberHandlerArgs handlerArgs)
+        /// <summary>
+        /// One PropertyChanged handler on one object of the path. It holds the manager weakly (as before, so a view-model never keeps a
+        /// binding alive) and is removed by <see cref="Unsubscribe"/> at once, instead of on that object's next event.
+        /// </summary>
+        private sealed class Subscription
         {
-            var currentName = currentPropertyInfo.Name;
-            PropertyChangedEventHandler? propertyChangedHandler = null;
-            propertyChangedHandler = (sender, args) =>
+            private readonly SubscriberHandlerArgs _handlerArgs;
+            private readonly string _name;
+            private readonly bool _isLast;
+
+            public Subscription(SubscriberHandlerArgs handlerArgs, string name, bool isLast)
             {
-                var handler = propertyChangedHandler;
-                if (handler == null)
-                {
-                    return;
-                }
-                if (!ReferenceEquals(handlerArgs, handlerArgs.Manager?._handlerArgs))
-                {
-                    propertyChangedHandler = null;
-                    var viewModel = sender as INotifyPropertyChanged;
-                    if (viewModel != null)
-                    {
-                        viewModel.PropertyChanged -= handler;
-                    }
-                }
-                if (propertyChangedHandler == null)
-                {
-                    return;
-                }
-                handlerArgs?.Manager?.Cache?.PrepareCache(handlerArgs.FinalPropertyInfo, sender, args);
-                if (args.PropertyName == currentName)
-                {
-                    handlerArgs?.Manager?.OnPropertyChanged(handlerArgs.FinalPropertyInfo);
-                }
-            };
-            INotifyPropertyChanged? changed = currentPropertyInfo.Accessor as INotifyPropertyChanged;
-            if (changed != null)
-            {
-                changed.PropertyChanged += propertyChangedHandler;
+                _handlerArgs = handlerArgs;
+                _name = name;
+                _isLast = isLast;
             }
+
+            public void OnPropertyChanged(object? sender, PropertyChangedEventArgs args)
+            {
+                var manager = _handlerArgs.Manager;
+                if (manager == null || !ReferenceEquals(_handlerArgs, manager._handlerArgs))
+                {
+                    // the binding is gone or subscribed elsewhere since: let go of this object
+                    if (sender is INotifyPropertyChanged source)
+                        source.PropertyChanged -= OnPropertyChanged;
+                    return;
+                }
+                manager.Cache?.PrepareCache(_handlerArgs.FinalPropertyInfo, sender, args);
+                if (!string.IsNullOrEmpty(args.PropertyName) && args.PropertyName != _name)
+                {
+                    return;
+                }
+                if (_isLast)
+                {
+                    manager.OnPropertyChanged(_handlerArgs.FinalPropertyInfo);
+                    return;
+                }
+                // An object in the middle of the path changed (vm.Child = new Leaf()): what the path reads is another object now.
+                // Subscribe again along the whole path and read from the new last object.
+                manager.Subscribe(manager._dataContext);
+                if (manager._handlerArgs != null)
+                    manager.OnPropertyChanged(manager._handlerArgs.FinalPropertyInfo);
+            }
+        }
+
+        private SubscriberHandlerArgs? _handlerArgs;
+        private object? _dataContext;
+        private readonly List<(INotifyPropertyChanged Source, Subscription Subscription)> _subscriptions =
+            new List<(INotifyPropertyChanged, Subscription)>();
+
+        private void RemoveSubscriptions()
+        {
+            foreach (var (source, subscription) in _subscriptions)
+            {
+                source.PropertyChanged -= subscription.OnPropertyChanged;
+            }
+            _subscriptions.Clear();
         }
 
         public void Unsubscribe()
         {
+            RemoveSubscriptions();
             _handlerArgs = default;
+            _dataContext = null;
 
             Cache?.Clear();
         }
