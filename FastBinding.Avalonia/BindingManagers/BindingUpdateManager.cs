@@ -7,6 +7,7 @@ using FastBindings.StateManagerObjects;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace FastBindings.BindingManagers
 {
@@ -120,6 +121,15 @@ namespace FastBindings.BindingManagers
                 System.Diagnostics.Debug.Write("[FastBinding] Could not create managers");
                 return;
             }
+            // A plain one-source binding of a CommonBinding pushes its value changes itself (DirectPush): nothing else to apply to
+            // the value, so no lookups by name, no boxing, no publisher and no checks per change.
+            if (_sourceStateManagers.Length >= 1 && _sourceStateManagers[0] is SourceViewModelStateManager<T> first
+                && _treeHelper is LightViewModelTreeHelper && cacheStrategy == CacheStrategy.None
+                && !HasConverter && !HasNotification && TargetNullValue == null && CanTrackViewModelChanges)
+            {
+                first.DirectPush = PushDirect;
+                _direct = first;
+            }
             var initialTarget = targetObject;
 
             if (CanTrackTargetChanges && ReflectionUtility.BildPropertyInfo(targetObject, targetProperty.Name).HasGetter)
@@ -199,6 +209,65 @@ namespace FastBindings.BindingManagers
                 return val ?? TargetNullValue;
             }
             return FallBackValue ?? val;
+        }
+
+        // The pusher for the last source type seen: a binding's source is nearly always one type, so no lookup per change.
+        private Type? _pushType;
+        private string? _pushName;
+        private Action<AvaloniaObject, object>? _pusher;
+        private SourceViewModelStateManager<T>? _direct;
+        private int _refreshQueued;
+
+        /// <summary>
+        /// A value change on the direct path: the target written straight from the source object through one compiled, typed delegate.
+        /// Returns false — the general path takes the change — off the UI thread (that path hands it to the dispatcher), where no
+        /// typed delegate fits the types, or if reading or writing threw (that path turns it into the fallback value).
+        /// </summary>
+        private bool PushDirect(object source, string name)
+        {
+            if (_updatingSource)
+                return true;
+            if (!(_targetObjectRef.Target is AvaloniaObject target) || !(_targetPropertyRef.Target is AvaloniaProperty property))
+                return true;
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                // A change on another thread: what it read may be overtaken before the UI thread applies it (another worker, a
+                // DataContext swap), so it only asks the UI thread to read the path's end again — the last read applied is the latest.
+                // One request at a time; a change while one waits is covered by the read it will make.
+                if (Interlocked.Exchange(ref _refreshQueued, 1) == 0)
+                    Dispatcher.UIThread.Post(RefreshDirect);
+                return true;
+            }
+            var type = source.GetType();
+            if (!ReferenceEquals(type, _pushType) || !ReferenceEquals(name, _pushName))
+            {
+                _pusher = DirectPushers.For(type, name, property);
+                _pushType = type;
+                _pushName = name;
+            }
+            var pusher = _pusher;
+            if (pusher == null)
+                return false;
+            _updatingTarget = true;
+            try
+            {
+                pusher(target, source);
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+            finally
+            {
+                _updatingTarget = false;
+            }
+        }
+
+        private void RefreshDirect()
+        {
+            Volatile.Write(ref _refreshQueued, 0);   // before reading: a change from now on asks again
+            _direct?.RefreshFromCurrent();
         }
 
         private void OnViewModelValueUpdated(object? sender, object? value)

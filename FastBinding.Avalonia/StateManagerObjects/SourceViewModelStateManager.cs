@@ -86,9 +86,30 @@ namespace FastBindings.StateManagerObjects
             }
         }
 
+        /// <summary>
+        /// Set by a plain binding (no converter, notification, cache or async): told the object the path ends on and the last name,
+        /// it writes the value into its target itself and returns true; false sends this change down the general path below.
+        /// </summary>
+        internal Func<object, string, bool>? DirectPush { get; set; }
+
+        /// <summary>Tells the binding the value at the path's current end again, read now (on the UI thread, by the direct path).</summary>
+        internal void RefreshFromCurrent()
+        {
+            ViewModelPropertyInfo<T>? info;
+            lock (_gate)
+            {
+                info = _handlerArgs?.FinalPropertyInfo;
+            }
+            if (info != null)
+                OnPropertyChanged(info);
+        }
+
         private void OnPropertyChanged(ViewModelPropertyInfo<T> finalPropertyInfo)
         {
             if (_updatingViewModel || finalPropertyInfo == null)
+                return;
+            if (DirectPush != null && Cache == null && !SupportAsync && finalPropertyInfo.Accessor is object last
+                && DirectPush(last, finalPropertyInfo.Name))
                 return;
 
             object? value;
