@@ -151,7 +151,7 @@ namespace FastBindings.StateManagerObjects
                 if (subscribers[index].Accessor is INotifyPropertyChanged source)
                 {
                     var subscription = new Subscription(_handlerArgs, subscribers[index].Name, isLast: index == subscribers.Length - 1);
-                    source.PropertyChanged += subscription.OnPropertyChanged;
+                    SourceHub.Of(source).Add(subscribers[index].Name, subscription);
                     _subscriptions.Add((source, subscription));
                 }
             }
@@ -174,7 +174,7 @@ namespace FastBindings.StateManagerObjects
         /// One PropertyChanged handler on one object of the path. It holds the manager weakly (as before, so a view-model never keeps a
         /// binding alive) and is removed by <see cref="Unsubscribe"/> at once, instead of on that object's next event.
         /// </summary>
-        private sealed class Subscription
+        private sealed class Subscription : IHubSubscriber
         {
             private readonly SubscriberHandlerArgs _handlerArgs;
             private readonly string _name;
@@ -187,14 +187,16 @@ namespace FastBindings.StateManagerObjects
                 _isLast = isLast;
             }
 
-            public void OnPropertyChanged(object? sender, PropertyChangedEventArgs args)
+            public string Name => _name;
+
+            public void OnSourceChanged(object? sender, PropertyChangedEventArgs args)
             {
                 var manager = _handlerArgs.Manager;
                 if (manager == null || !ReferenceEquals(_handlerArgs, manager._handlerArgs))
                 {
                     // the binding is gone or subscribed elsewhere since: let go of this object
                     if (sender is INotifyPropertyChanged source)
-                        source.PropertyChanged -= OnPropertyChanged;
+                        SourceHub.Of(source).Remove(_name, this);
                     return;
                 }
                 manager.Cache?.PrepareCache(_handlerArgs.FinalPropertyInfo, sender, args);
@@ -224,7 +226,7 @@ namespace FastBindings.StateManagerObjects
         {
             foreach (var (source, subscription) in _subscriptions)
             {
-                source.PropertyChanged -= subscription.OnPropertyChanged;
+                SourceHub.Of(source).Remove(subscription.Name, subscription);
             }
             _subscriptions.Clear();
         }
