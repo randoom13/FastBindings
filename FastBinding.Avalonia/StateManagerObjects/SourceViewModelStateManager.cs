@@ -169,25 +169,67 @@ namespace FastBindings.StateManagerObjects
             }
         }
 
+        /// <summary>
+        /// Subscribes again along the path from the same DataContext — only if <paramref name="current"/> is still this manager's
+        /// subscription, checked and done under one lock. A change raised on a worker thread could otherwise pass the check, lose
+        /// the race to a DataContext change on the UI thread, and then subscribe the binding to the view-model it had left.
+        /// </summary>
+        private bool ResubscribeIfCurrent(SubscriberHandlerArgs current, out ViewModelPropertyInfo<T> final)
+        {
+            lock (_gate)
+            {
+                final = null!;
+                if (!ReferenceEquals(current, _handlerArgs))
+                    return false;
+                SubscribeCore(_dataContext);
+                if (_handlerArgs == null)
+                    return false;
+                final = _handlerArgs.FinalPropertyInfo;
+                return true;
+            }
+        }
+
         private void SubscribeCore(object? dataContext)
         {
-            RemoveSubscriptions();
-            _dataContext = dataContext;
-            var subscribers = _viewModelTree?.CalculateSubscribers(_propertyNamePath, dataContext)?.ToArray();
-            if (subscribers == null || subscribers.Length == 0)
+            // Subscribe, then read the path again: an object in the middle of it may have been replaced on another thread after it
+            // was read and before its handler was registered, and that change told nobody. If the path now reads other objects,
+            // subscribe again (a few times at most; a change after the last check is told to the handlers registered by then).
+            for (var attempt = 0; attempt < 8; attempt++)
             {
-                return;
-            }
-            _handlerArgs = new SubscriberHandlerArgs(this, subscribers[subscribers.Length - 1]);
-            for (var index = 0; index < subscribers.Length; index++)
-            {
-                if (subscribers[index].Accessor is INotifyPropertyChanged source)
+                RemoveSubscriptions();
+                _dataContext = dataContext;
+                var subscribers = _viewModelTree?.CalculateSubscribers(_propertyNamePath, dataContext)?.ToArray();
+                if (subscribers == null || subscribers.Length == 0)
                 {
-                    var subscription = new Subscription(_handlerArgs, subscribers[index].Name, isLast: index == subscribers.Length - 1);
-                    SourceHub.Of(source).Add(subscribers[index].Name, subscription);
-                    _subscriptions.Add((source, subscription));
+                    return;
+                }
+                _handlerArgs = new SubscriberHandlerArgs(this, subscribers[subscribers.Length - 1]);
+                for (var index = 0; index < subscribers.Length; index++)
+                {
+                    if (subscribers[index].Accessor is INotifyPropertyChanged source)
+                    {
+                        var subscription = new Subscription(_handlerArgs, subscribers[index].Name, isLast: index == subscribers.Length - 1);
+                        SourceHub.Of(source).Add(subscribers[index].Name, subscription);
+                        _subscriptions.Add((source, subscription));
+                    }
+                }
+                if (subscribers.Length == 1 || SamePath(subscribers, _viewModelTree!.CalculateSubscribers(_propertyNamePath, dataContext)))
+                {
+                    return;
                 }
             }
+        }
+
+        private static bool SamePath(ViewModelPropertyInfo<T>[] subscribed, IEnumerable<ViewModelPropertyInfo<T>> now)
+        {
+            var index = 0;
+            foreach (var info in now)
+            {
+                if (index >= subscribed.Length || !ReferenceEquals(info.Accessor, subscribed[index].Accessor))
+                    return false;
+                index++;
+            }
+            return index == subscribed.Length;
         }
 
         protected class SubscriberHandlerArgs
@@ -244,9 +286,8 @@ namespace FastBindings.StateManagerObjects
                 }
                 // An object in the middle of the path changed (vm.Child = new Leaf()): what the path reads is another object now.
                 // Subscribe again along the whole path and read from the new last object.
-                manager.Subscribe(manager._dataContext);
-                if (manager._handlerArgs != null)
-                    manager.OnPropertyChanged(manager._handlerArgs.FinalPropertyInfo);
+                if (manager.ResubscribeIfCurrent(_handlerArgs, out var final))
+                    manager.OnPropertyChanged(final);
             }
         }
 
