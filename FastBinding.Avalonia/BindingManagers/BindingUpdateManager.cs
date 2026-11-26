@@ -209,12 +209,18 @@ namespace FastBindings.BindingManagers
 
         private void OnViewModelValueUpdated(AvaloniaObject target, AvaloniaProperty property, object? sender, object? value)
         {
-            var dataContextTarget = _dataContextParams.GetDataContextTarget(target);
-            var dataContext = _dataContextParams.GetDataContext(dataContextTarget);
-            var converterFunc = _convertersProxy.FindForwardConverter(dataContext);
+            var hasConverter = HasConverter;
+            var hasNotification = HasNotification;
+            object? dataContext = null;
+            if (hasConverter || hasNotification)
+            {
+                var dataContextTarget = _dataContextParams.GetDataContextTarget(target);
+                dataContext = _dataContextParams.GetDataContext(dataContextTarget);
+            }
+            var converterFunc = hasConverter ? _convertersProxy.FindForwardConverter(dataContext) : null;
             if (converterFunc == null)
             {
-                if (!ReferenceEquals(sender, _sourceStateManagers.FirstOrDefault()))
+                if (_sourceStateManagers.Length == 0 || !ReferenceEquals(sender, _sourceStateManagers[0]))
                     return;
             }
             else
@@ -245,8 +251,7 @@ namespace FastBindings.BindingManagers
             }
             try
             {
-                var ars = NotificationArgs.CreateFromSource(sender, value);
-                if (NeedNotify(dataContext, ars))
+                if (!hasNotification || NeedNotify(dataContext, NotificationArgs.CreateFromSource(sender, value)))
                     UpdateTarget(target, property, value);
             }
             catch (Exception ex)
@@ -342,6 +347,11 @@ namespace FastBindings.BindingManagers
             }
         }
 
+        // Whether a converter or a notification filter is configured at all: when neither is, a value change needs neither the
+        // DataContext nor a lookup nor NotificationArgs.
+        private bool HasConverter => _convertersProxy.Converter != null || !string.IsNullOrEmpty(_convertersProxy.ConverterName);
+        private bool HasNotification => _notificationProxy.Notification != null || !string.IsNullOrEmpty(_notificationProxy.NotificationName);
+
         private bool CanTrackViewModelChanges =>
             Mode == BindingMode.Default || Mode == BindingMode.OneWay
             || Mode == BindingMode.TwoWay;
@@ -354,15 +364,28 @@ namespace FastBindings.BindingManagers
 
         private static bool CanUpdateTarget(object? value) => !(value is ExceptionHolder);
 
-        private static bool CanUpdateTarget(AvaloniaProperty property, object? value)
-            => CanUpdateTarget(value) && ReflectionUtility.IsValidType(value, property.PropertyType);
+        // The value type that last passed the type check for this binding's property: the same type passes again without
+        // GetType().IsAssignableFrom on every change.
+        private Type? _validValueType;
+
+        private bool CanUpdateTarget(AvaloniaProperty property, object? value)
+        {
+            if (!CanUpdateTarget(value))
+                return false;
+            if (value != null && ReferenceEquals(value.GetType(), _validValueType))
+                return true;
+            if (!ReflectionUtility.IsValidType(value, property.PropertyType))
+                return false;
+            _validValueType = value?.GetType();
+            return true;
+        }
 
         private void UpdateTarget(AvaloniaObject target, AvaloniaProperty property, object? value)
         {
             _updatingTarget = true;
             try
             {
-                target.SetValue(property, value);
+                TargetSetters.For(property)(target, value);
             }
             catch (Exception ex)
             {
