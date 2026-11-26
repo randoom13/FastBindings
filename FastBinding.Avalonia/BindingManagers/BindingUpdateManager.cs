@@ -87,7 +87,25 @@ namespace FastBindings.BindingManagers
             _dataContextParams.AnchorObject = dataContextObj;
         }
 
+        // While Initialize runs, a change of the target is not written to the source: GetObservable(targetProperty) reports the
+        // target's current value as soon as it is subscribed — its default (a ComboBox's SelectedIndex -1) — and a two-way binding
+        // wrote that into the view-model before the view-model's own value reached the target.
+        private bool _initializing;
+
         public void Initialize(CacheStrategy cacheStrategy)
+        {
+            _initializing = true;
+            try
+            {
+                InitializeCore(cacheStrategy);
+            }
+            finally
+            {
+                _initializing = false;
+            }
+        }
+
+        private void InitializeCore(CacheStrategy cacheStrategy)
         {
             var targetObject = _targetObjectRef.Target as AvaloniaObject;
             var targetProperty = _targetPropertyRef.Target as AvaloniaProperty;
@@ -401,7 +419,7 @@ namespace FastBindings.BindingManagers
 
         private void OnDependencyPropertyChanged(object? newValue)
         {
-            if (_updatingTarget)
+            if (_updatingTarget || _initializing)
             {
                 return;
             }
