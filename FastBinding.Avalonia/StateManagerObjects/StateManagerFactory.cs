@@ -1,6 +1,7 @@
 ﻿using Avalonia;
 using FastBindings.Helpers;
 using System;
+using System.Runtime.CompilerServices;
 using System.Linq;
 
 namespace FastBindings.StateManagerObjects
@@ -11,6 +12,7 @@ namespace FastBindings.StateManagerObjects
         public const string AsyncErrorMessage = "[AsyncFastBinding] An error occurred while attempting to get data from the source property";
 
         private static SourceViewModelCache _cache = new SourceViewModelCache();
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static ISourceStateManager[] Build<T>(string sources, AvaloniaObject targetObject,
             DataContextParams dataContextParams, CacheStrategy strategy, IViewModelTreeHelper<T> treeHelper)
         {
@@ -37,6 +39,7 @@ namespace FastBindings.StateManagerObjects
                 ToArray();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static ISourceStateManager Parse<T>(string property, AvaloniaObject targetObject, DataContextParams dataContextParams,
              ICache? cache, IViewModelTreeHelper<T> treeHelper)
         {

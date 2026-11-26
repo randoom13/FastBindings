@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Reflection;
 using System.Threading;
 
@@ -30,6 +31,7 @@ namespace FastBindings.Helpers
             _name = fieldInfo?.Name ?? "None";
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public bool Set(Type targetType, object target, object? value)
         {
             if (!IsValid)
@@ -71,6 +73,7 @@ namespace FastBindings.Helpers
             return true;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public object? Get(Type targetType, object target)
         {
             if (!IsValid)

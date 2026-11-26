@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -49,6 +50,7 @@ namespace FastBindings.Helpers
             return info.HasGetter ? info.PropertyType : null;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private PropertyInfoResult GetPropertyInfoResult(string propertyName)
         {
             if (_propertyByNames.TryGetValue(propertyName, out var propertyInfo))
@@ -57,6 +59,7 @@ namespace FastBindings.Helpers
                 name => new PropertyInfoResult(_propertyInfos.Value.FirstOrDefault(it => it.Name == name)));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public object? GetProperty(object target, string propertyName)
         {
             Verify(target, propertyName);
@@ -83,6 +86,7 @@ namespace FastBindings.Helpers
             return _methodAccessorByType.GetOrAdd(type, t => new MethodsAccessor(t));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static PropertyAccessor GetPropertyAccessor(Type type)
         {
             if (_propertyAccessorByType.TryGetValue(type, out var accessor))

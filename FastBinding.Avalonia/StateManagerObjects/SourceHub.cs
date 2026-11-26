@@ -24,8 +24,10 @@ namespace FastBindings.StateManagerObjects
 
         private SourceHub(INotifyPropertyChanged source) => _source = source;
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static SourceHub Of(INotifyPropertyChanged source) => Hubs.GetValue(source, s => new SourceHub(s));
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public void Add(string name, IHubSubscriber subscriber)
         {
             lock (_gate)
@@ -38,6 +40,7 @@ namespace FastBindings.StateManagerObjects
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public void Remove(string name, IHubSubscriber subscriber)
         {
             lock (_gate)
@@ -56,6 +59,7 @@ namespace FastBindings.StateManagerObjects
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnPropertyChanged(object? sender, PropertyChangedEventArgs args)
         {
             IHubSubscriber? single = null;
