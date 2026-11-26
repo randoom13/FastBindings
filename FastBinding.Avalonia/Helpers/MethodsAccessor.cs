@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace FastBindings.Helpers
@@ -15,7 +16,8 @@ namespace FastBindings.Helpers
             TargetType = targetType;
         }
 
-        private readonly Dictionary<string, Action<object, object?>> _methodActionByNames = new Dictionary<string, Action<object, object?>>();
+        // Read and filled from any thread a binding runs on.
+        private readonly ConcurrentDictionary<string, Action<object, object?>> _methodActionByNames = new ConcurrentDictionary<string, Action<object, object?>>(StringComparer.Ordinal);
         private void Verify(object target, string propertyName)
         {
             if (string.IsNullOrEmpty(propertyName))
@@ -42,7 +44,7 @@ namespace FastBindings.Helpers
                 if (methodAction == null)
                     return;
 
-                _methodActionByNames[actionMethodName] = methodAction;
+                methodAction = _methodActionByNames.GetOrAdd(actionMethodName, methodAction);
             }
             try
             {

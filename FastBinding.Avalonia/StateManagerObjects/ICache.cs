@@ -19,30 +19,42 @@ namespace FastBindings.StateManagerObjects
         private object? _value;
         private bool _hasValue = false;
         private object? _sessionKey;
+        // One instance is shared by every binding with CacheStrategy.Simple (StateManagerFactory), whatever thread a change
+        // arrives on; its entries are keyed by the PropertyChanged event (the session key), so each step under one lock is enough.
+        private readonly object _gate = new object();
 
         public bool TryGetCache<T>(ViewModelPropertyInfo<T> finalPropertyInfo, out object? result)
         {
-            var hasValue = _hasValue && _sessionKey != null && IsSame(finalPropertyInfo);
-            result = hasValue ? _value : null;
-            return hasValue;
+            lock (_gate)
+            {
+                var hasValue = _hasValue && _sessionKey != null && IsSame(finalPropertyInfo);
+                result = hasValue ? _value : null;
+                return hasValue;
+            }
         }
 
         public void ApplyCache<T>(ViewModelPropertyInfo<T> finalPropertyInfo, object? value)
         {
-            if (!_hasValue && _sessionKey != null && IsSame(finalPropertyInfo))
+            lock (_gate)
             {
-                _value = value;
-                _hasValue = true;
+                if (!_hasValue && _sessionKey != null && IsSame(finalPropertyInfo))
+                {
+                    _value = value;
+                    _hasValue = true;
+                }
             }
         }
 
         public void Clear()
         {
-            _name = null;
-            _accessor = null;
-            _value = null;
-            _hasValue = false;
-            _sessionKey = null;
+            lock (_gate)
+            {
+                _name = null;
+                _accessor = null;
+                _value = null;
+                _hasValue = false;
+                _sessionKey = null;
+            }
         }
 
         private bool IsSame<T>(ViewModelPropertyInfo<T> finalPropertyInfo) =>
@@ -51,23 +63,26 @@ namespace FastBindings.StateManagerObjects
 
         public void PrepareCache<T>(ViewModelPropertyInfo<T> finalPropertyInfo, object? sender, PropertyChangedEventArgs args)
         {
-            if (!ReferenceEquals(sender, finalPropertyInfo.Accessor))
+            lock (_gate)
             {
-                Clear();
-                return;
-            }
+                if (!ReferenceEquals(sender, finalPropertyInfo.Accessor))
+                {
+                    Clear();
+                    return;
+                }
 
-            if (!ReferenceEquals(args, _sessionKey))
-            {
-                Clear();
-                _sessionKey = args;
-            }
-            if (finalPropertyInfo == null || !IsSame(finalPropertyInfo))
-            {
-                Clear();
-                _sessionKey = args;
-                _name = null;
-                _accessor = null;
+                if (!ReferenceEquals(args, _sessionKey))
+                {
+                    Clear();
+                    _sessionKey = args;
+                }
+                if (finalPropertyInfo == null || !IsSame(finalPropertyInfo))
+                {
+                    Clear();
+                    _sessionKey = args;
+                    _name = null;
+                    _accessor = null;
+                }
             }
         }
     }

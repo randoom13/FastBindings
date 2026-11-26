@@ -136,7 +136,19 @@ namespace FastBindings.StateManagerObjects
             }
         }
 
+        // Subscribe runs on the UI thread (DataContext changes) and, when an object in the middle of the path changes, on whatever
+        // thread raised that change: the subscriptions and the handler args change only under this lock.
+        private readonly object _gate = new object();
+
         public void Subscribe(object? dataContext)
+        {
+            lock (_gate)
+            {
+                SubscribeCore(dataContext);
+            }
+        }
+
+        private void SubscribeCore(object? dataContext)
         {
             RemoveSubscriptions();
             _dataContext = dataContext;
@@ -233,9 +245,12 @@ namespace FastBindings.StateManagerObjects
 
         public void Unsubscribe()
         {
-            RemoveSubscriptions();
-            _handlerArgs = default;
-            _dataContext = null;
+            lock (_gate)
+            {
+                RemoveSubscriptions();
+                _handlerArgs = default;
+                _dataContext = null;
+            }
 
             Cache?.Clear();
         }

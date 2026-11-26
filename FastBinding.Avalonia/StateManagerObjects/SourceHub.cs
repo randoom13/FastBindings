@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -18,6 +18,9 @@ namespace FastBindings.StateManagerObjects
         private readonly Dictionary<string, List<IHubSubscriber>> _byName = new Dictionary<string, List<IHubSubscriber>>(StringComparer.Ordinal);
         private readonly INotifyPropertyChanged _source;
         private int _count;
+        // A view-model may raise PropertyChanged on any thread while the UI thread subscribes and unsubscribes bindings:
+        // the lists change only under this lock, and the bindings are told outside it, from a copy.
+        private readonly object _gate = new object();
 
         private SourceHub(INotifyPropertyChanged source) => _source = source;
 
@@ -25,48 +28,65 @@ namespace FastBindings.StateManagerObjects
 
         public void Add(string name, IHubSubscriber subscriber)
         {
-            if (!_byName.TryGetValue(name, out var list))
-                _byName[name] = list = new List<IHubSubscriber>(1);
-            list.Add(subscriber);
-            if (_count++ == 0)
-                _source.PropertyChanged += OnPropertyChanged;
+            lock (_gate)
+            {
+                if (!_byName.TryGetValue(name, out var list))
+                    _byName[name] = list = new List<IHubSubscriber>(1);
+                list.Add(subscriber);
+                if (_count++ == 0)
+                    _source.PropertyChanged += OnPropertyChanged;
+            }
         }
 
         public void Remove(string name, IHubSubscriber subscriber)
         {
-            if (!_byName.TryGetValue(name, out var list))
-                return;
-            var index = list.IndexOf(subscriber);
-            if (index < 0)
-                return;
-            list[index] = list[list.Count - 1];   // order among one property's subscribers does not matter
-            list.RemoveAt(list.Count - 1);
-            if (list.Count == 0)
-                _byName.Remove(name);
-            if (--_count == 0)
-                _source.PropertyChanged -= OnPropertyChanged;
+            lock (_gate)
+            {
+                if (!_byName.TryGetValue(name, out var list))
+                    return;
+                var index = list.IndexOf(subscriber);
+                if (index < 0)
+                    return;
+                list[index] = list[list.Count - 1];   // order among one property's subscribers does not matter
+                list.RemoveAt(list.Count - 1);
+                if (list.Count == 0)
+                    _byName.Remove(name);
+                if (--_count == 0)
+                    _source.PropertyChanged -= OnPropertyChanged;
+            }
         }
 
         private void OnPropertyChanged(object? sender, PropertyChangedEventArgs args)
         {
-            if (string.IsNullOrEmpty(args.PropertyName))
+            IHubSubscriber? single = null;
+            IHubSubscriber[]? several = null;
+            lock (_gate)
             {
-                // every property changed: everyone is told (a copy, since they may unsubscribe while told)
-                var all = new List<IHubSubscriber>(_count);
-                foreach (var list in _byName.Values)
-                    all.AddRange(list);
-                foreach (var subscriber in all)
-                    subscriber.OnSourceChanged(sender, args);
+                if (string.IsNullOrEmpty(args.PropertyName))
+                {
+                    // every property changed: everyone is told
+                    var all = new List<IHubSubscriber>(_count);
+                    foreach (var list in _byName.Values)
+                        all.AddRange(list);
+                    several = all.ToArray();
+                }
+                else if (_byName.TryGetValue(args.PropertyName!, out var bound))
+                {
+                    if (bound.Count == 1)
+                        single = bound[0];
+                    else
+                        several = bound.ToArray();
+                }
+            }
+            // told outside the lock, from a copy: a binding may unsubscribe or subscribe again while it is told
+            if (single != null)
+            {
+                single.OnSourceChanged(sender, args);
                 return;
             }
-            if (!_byName.TryGetValue(args.PropertyName!, out var bound))
+            if (several == null)
                 return;
-            if (bound.Count == 1)
-            {
-                bound[0].OnSourceChanged(sender, args);
-                return;
-            }
-            foreach (var subscriber in bound.ToArray())
+            foreach (var subscriber in several)
                 subscriber.OnSourceChanged(sender, args);
         }
     }

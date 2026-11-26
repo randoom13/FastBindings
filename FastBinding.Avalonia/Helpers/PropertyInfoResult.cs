@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Reflection;
+using System.Threading;
 
 namespace FastBindings.Helpers
 {
@@ -60,9 +61,10 @@ namespace FastBindings.Helpers
             if (action == null)
             {
                 action = ExpressionTreeHelper.CreateSetter(_fieldInfo, targetType, target);
-                _setterFunc = action;
                 if (action == null)
                     return false;
+                // two threads may compile it at once: one delegate is kept, both work
+                action = Interlocked.CompareExchange(ref _setterFunc, action, null) ?? action;
             }
 
             action(target, value);
@@ -93,11 +95,11 @@ namespace FastBindings.Helpers
             if (func == null)
             {
                 func = ExpressionTreeHelper.CreateGetter(_fieldInfo, targetType, target);
-                _getterFunc = func;
                 if (func == null)
                 {
                     return null;
                 }
+                func = Interlocked.CompareExchange(ref _getterFunc, func, null) ?? func;
             }
 
             return func(target);
