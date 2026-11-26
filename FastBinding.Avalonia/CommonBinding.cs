@@ -2,6 +2,7 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.XamlIl.Runtime;
+using Avalonia.VisualTree;
 using FastBindings.BindingManagers;
 using FastBindings.Helpers;
 using FastBindings.Interfaces;
@@ -42,9 +43,22 @@ namespace FastBindings
             if (visualElement != null)
             {
                 ApplyTarget(targetObject, targetProperty, anchorObj);
-                visualElement.Loaded += OnTargetLoaded;
+                // Start when the element joins the visual tree, before its first layout — not on Loaded, which comes after it:
+                // until then IsVisible bindings still read true, so a view's hidden parts were measured once and their item
+                // lists made containers that then stayed (the Inspector: 9 244 controls instead of 3 693).
+                if (visualElement.IsAttachedToVisualTree())
+                    OnTargetLoaded(visualElement, EventArgs.Empty);
+                else
+                    visualElement.AttachedToVisualTree += OnTargetAttached;
             }
             return AvaloniaProperty.UnsetValue;
+        }
+
+        private void OnTargetAttached(object? sender, VisualTreeAttachmentEventArgs e)
+        {
+            if (sender is Visual visual)
+                visual.AttachedToVisualTree -= OnTargetAttached;
+            OnTargetLoaded(sender, e);
         }
 
         // Switch to lazy loading to avoid issues with binding to a ListBox from any object in the DataTemplate
