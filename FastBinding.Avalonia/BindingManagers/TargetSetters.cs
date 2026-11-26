@@ -1,6 +1,8 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Data;
 using System;
+using FastBindings;
+using System.Runtime.CompilerServices;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Linq.Expressions;
@@ -27,6 +29,7 @@ namespace FastBindings.BindingManagers
             && m.GetParameters()[0].ParameterType.IsGenericType
             && m.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(DirectPropertyBase<>));
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static Action<AvaloniaObject, object?> For(AvaloniaProperty property) => Setters.GetOrAdd(property, Create);
 
         private static Action<AvaloniaObject, object?> Create(AvaloniaProperty property)
@@ -47,7 +50,7 @@ namespace FastBindings.BindingManagers
                     call = Expression.Call(target, SetDirect.MakeGenericMethod(type), Expression.Constant(property, direct!), typed);
                 if (call == null)
                     return Untyped(property);
-                var fast = Expression.Lambda<Action<AvaloniaObject, object?>>(Expression.Block(typeof(void), call), target, value).Compile();
+                var fast = FastBindingsDiagnostics.Compile(Expression.Lambda<Action<AvaloniaObject, object?>>(Expression.Block(typeof(void), call), target, value));
                 var slow = Untyped(property);
                 return (t, v) =>
                 {

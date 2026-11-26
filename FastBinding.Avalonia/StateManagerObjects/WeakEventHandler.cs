@@ -1,4 +1,5 @@
 ﻿using System;
+using FastBindings;
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -40,7 +41,7 @@ namespace FastBindings.StateManagerObjects
             var senderParam = Expression.Parameter(typeof(object), "sender");
             var argumentParam = Expression.Parameter(typeof(TEventArgs), "argument");
             var call = Expression.Call(Expression.Convert(targetParam, method.DeclaringType!), method, senderParam, argumentParam);
-            return Expression.Lambda<Action<object, object, TEventArgs?>>(call, targetParam, senderParam, argumentParam).Compile();
+            return FastBindingsDiagnostics.Compile(Expression.Lambda<Action<object, object, TEventArgs?>>(call, targetParam, senderParam, argumentParam));
         }
 
         public void Invoke(object sender, TEventArgs? argument)

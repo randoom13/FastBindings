@@ -1,6 +1,7 @@
 ﻿using Avalonia;
 using FastBindings.Helpers;
 using System;
+using System.Runtime.CompilerServices;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -54,6 +55,7 @@ namespace FastBindings.StateManagerObjects
             remove { _propertyUpdatedPublisher.Unsubscribe(value); }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public object? GetSourceProperty(object? dataContext, bool isWrapException)
         {
             return ExceptionUtility.Handle(() =>
@@ -93,6 +95,7 @@ namespace FastBindings.StateManagerObjects
         internal Func<object, string, bool>? DirectPush { get; set; }
 
         /// <summary>Tells the binding the value at the path's current end again, read now (on the UI thread, by the direct path).</summary>
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         internal void RefreshFromCurrent()
         {
             ViewModelPropertyInfo<T>? info;
@@ -104,6 +107,7 @@ namespace FastBindings.StateManagerObjects
                 OnPropertyChanged(info);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnPropertyChanged(ViewModelPropertyInfo<T> finalPropertyInfo)
         {
             if (_updatingViewModel || finalPropertyInfo == null)
@@ -161,6 +165,7 @@ namespace FastBindings.StateManagerObjects
         // thread raised that change: the subscriptions and the handler args change only under this lock.
         private readonly object _gate = new object();
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public void Subscribe(object? dataContext)
         {
             lock (_gate)
@@ -174,6 +179,7 @@ namespace FastBindings.StateManagerObjects
         /// subscription, checked and done under one lock. A change raised on a worker thread could otherwise pass the check, lose
         /// the race to a DataContext change on the UI thread, and then subscribe the binding to the view-model it had left.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private bool ResubscribeIfCurrent(SubscriberHandlerArgs current, out ViewModelPropertyInfo<T> final)
         {
             lock (_gate)
@@ -189,16 +195,21 @@ namespace FastBindings.StateManagerObjects
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void SubscribeCore(object? dataContext)
         {
             // Subscribe, then read the path again: an object in the middle of it may have been replaced on another thread after it
             // was read and before its handler was registered, and that change told nobody. If the path now reads other objects,
             // subscribe again (a few times at most; a change after the last check is told to the handlers registered by then).
+            FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._resubscriptions);
             for (var attempt = 0; attempt < 8; attempt++)
             {
+                if (attempt > 0)
+                    FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._resubscriptionRetries);
                 RemoveSubscriptions();
                 _dataContext = dataContext;
-                var subscribers = _viewModelTree?.CalculateSubscribers(_propertyNamePath, dataContext)?.ToArray();
+                var calculated = _viewModelTree?.CalculateSubscribers(_propertyNamePath, dataContext);
+                var subscribers = calculated as ViewModelPropertyInfo<T>[] ?? calculated?.ToArray();   // an array already: not copied
                 if (subscribers == null || subscribers.Length == 0)
                 {
                     return;
@@ -220,6 +231,7 @@ namespace FastBindings.StateManagerObjects
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static bool SamePath(ViewModelPropertyInfo<T>[] subscribed, IEnumerable<ViewModelPropertyInfo<T>> now)
         {
             var index = 0;
@@ -264,6 +276,7 @@ namespace FastBindings.StateManagerObjects
 
             public string Name => _name;
 
+            [MethodImpl(MethodImplOptions.AggressiveOptimization)]
             public void OnSourceChanged(object? sender, PropertyChangedEventArgs args)
             {
                 var manager = _handlerArgs.Manager;
@@ -296,6 +309,7 @@ namespace FastBindings.StateManagerObjects
         private readonly List<(INotifyPropertyChanged Source, Subscription Subscription)> _subscriptions =
             new List<(INotifyPropertyChanged, Subscription)>();
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void RemoveSubscriptions()
         {
             foreach (var (source, subscription) in _subscriptions)
@@ -305,6 +319,7 @@ namespace FastBindings.StateManagerObjects
             _subscriptions.Clear();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public void Unsubscribe()
         {
             lock (_gate)

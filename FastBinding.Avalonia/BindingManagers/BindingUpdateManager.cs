@@ -5,6 +5,7 @@ using FastBindings.Helpers;
 using FastBindings.Interfaces;
 using FastBindings.StateManagerObjects;
 using System;
+using System.Runtime.CompilerServices;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -93,6 +94,7 @@ namespace FastBindings.BindingManagers
         // wrote that into the view-model before the view-model's own value reached the target.
         private bool _initializing;
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public void Initialize(CacheStrategy cacheStrategy)
         {
             _initializing = true;
@@ -106,8 +108,10 @@ namespace FastBindings.BindingManagers
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void InitializeCore(CacheStrategy cacheStrategy)
         {
+            FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._started);
             var targetObject = _targetObjectRef.Target as AvaloniaObject;
             var targetProperty = _targetPropertyRef.Target as AvaloniaProperty;
             if (targetObject == null || targetProperty == null)
@@ -202,6 +206,7 @@ namespace FastBindings.BindingManagers
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private object? CalculateValue(object? val)
         {
             if (!(val is ExceptionHolder))
@@ -223,6 +228,7 @@ namespace FastBindings.BindingManagers
         /// Returns false — the general path takes the change — off the UI thread (that path hands it to the dispatcher), where no
         /// typed delegate fits the types, or if reading or writing threw (that path turns it into the fallback value).
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private bool PushDirect(object source, string name)
         {
             if (_updatingSource)
@@ -251,6 +257,7 @@ namespace FastBindings.BindingManagers
             _updatingTarget = true;
             try
             {
+                FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._directPushes);
                 pusher(target, source);
                 return true;
             }
@@ -270,8 +277,10 @@ namespace FastBindings.BindingManagers
             _direct?.RefreshFromCurrent();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnViewModelValueUpdated(object? sender, object? value)
         {
+            FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._generalPushes);
             if (_updatingSource)
             {
                 return;
@@ -350,8 +359,10 @@ namespace FastBindings.BindingManagers
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnDataContextChanged(object? sender, EventArgs e)
         {
+            FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._dataContextChanges);
             var target = _targetObjectRef?.Target as AvaloniaObject;
             var property = _targetPropertyRef?.Target as AvaloniaProperty;
             if (target == null || property == null)
@@ -455,6 +466,7 @@ namespace FastBindings.BindingManagers
         // GetType().IsAssignableFrom on every change.
         private Type? _validValueType;
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private bool CanUpdateTarget(AvaloniaProperty property, object? value)
         {
             if (!CanUpdateTarget(value))
@@ -467,11 +479,13 @@ namespace FastBindings.BindingManagers
             return true;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void UpdateTarget(AvaloniaObject target, AvaloniaProperty property, object? value)
         {
             _updatingTarget = true;
             try
             {
+                FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._targetWrites);
                 TargetSetters.For(property)(target, value);
             }
             catch (Exception ex)
@@ -514,7 +528,10 @@ namespace FastBindings.BindingManagers
                 }
                 var ars = NotificationArgs.CreateFromTarget(target, val);
                 if (NeedNotify(dataContext, ars))
+                {
+                    FastBindingsDiagnostics.ObserveSourceWrite(target, property.Name, val);
                     UpdateSource(val);
+                }
             }
             catch (Exception ex)
             {
@@ -533,6 +550,7 @@ namespace FastBindings.BindingManagers
 
         private void UpdateSource(params object?[] values)
         {
+            FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._sourceWrites);
             _updatingSource = true;
             for (int index = 0; index < _sourceStateManagers.Length; index++)
             {
