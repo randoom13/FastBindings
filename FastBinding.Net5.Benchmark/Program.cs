@@ -64,17 +64,26 @@ namespace WpfBench
                 ("FastBindings CommonBinding", () => new Fast(), false),
             };
             Console.WriteLine($"[wpf-bench] {Environment.GetEnvironmentVariable("LABEL")} views={Views} view-models={(Shared ? "one shared" : "one per view")} bindings/view=30 rounds={Rounds}");
+            // Every kind first warmed up (WARMUP rounds), then the kinds measured in turn, round by round: each sees the same JIT
+            // tiers and machine state. Measured one kind after another, the kind run first ran on WPF code the JIT had not
+            // optimised yet (the baseline came out slower than the bindings).
+            var selected = kinds.Where(k => only == null || k.Name.Contains(only) || k.Plain).ToArray();
+            var warmup = int.Parse(Environment.GetEnvironmentVariable("WARMUP") ?? "10");
+            var cold = selected.ToDictionary(k => k.Name, k => Run(k.Name, k.Make, k.Plain));
+            for (var w = 0; w < warmup; w++)
+                foreach (var k in selected) Run(k.Name, k.Make, k.Plain);
+            var rounds = selected.ToDictionary(k => k.Name, _ => new List<Steps>());
+            for (var r = 0; r < Rounds; r++)
+                foreach (var k in selected) rounds[k.Name].Add(Run(k.Name, k.Make, k.Plain));
             var results = new Dictionary<string, Steps>();
-            foreach (var (name, make, plain) in kinds)
+            foreach (var (name, _, _) in selected)
             {
-                if (only != null && !name.Contains(only) && !plain) continue;
-                var cold = Run(name, make, plain);
-                var m = Enumerable.Range(0, Rounds).Select(_ => Run(name, make, plain)).ToList();
+                var m = rounds[name];
                 var med = new Steps(Med(m, x => x.Build), Med(m, x => x.Bind), Med(m, x => x.Attach), Med(m, x => x.Push), Med(m, x => x.Detach));
                 results[name] = med;
                 Console.WriteLine($"[wpf-bench] {name,-28} build {med.Build,7:F2} ms  bind {med.Bind,7:F2} ms  attach {med.Attach,7:F2} ms  " +
                                   $"values {Med(m, x => x.Values),7:F2} ms  push {med.Push * 1000,6:F3} µs per binding updated  detach {med.Detach,7:F2} ms  " +
-                                  $"(cold first round: values {cold.Values:F1} ms)");
+                                  $"(cold first round: values {cold[name].Values:F1} ms)");
             }
             if (results.TryGetValue("no bindings (baseline)", out var baseline))
                 foreach (var (name, steps) in results)
@@ -105,11 +114,11 @@ namespace WpfBench
             diag.GetProperty("Enabled")!.SetValue(null, true);
             var inside = new List<Steps>();
             var whole = new List<Steps>();
-            for (var r = 0; r <= Rounds; r++)
+            for (var r = 0; r <= Rounds + 3; r++)
             {
                 var times = new double[5];
                 var steps = Run("diag", () => new Fast(), false, (step, before) => times[step] = (Total() - before) / (step == 3 ? Changes * BindingsPerChange * Views : 1), Total);
-                if (r == 0) continue;   // the cold round
+                if (r < 4) continue;   // warming up
                 inside.Add(new Steps(times[0], times[1], times[2], times[3], times[4]));
                 whole.Add(steps);
             }
