@@ -6,7 +6,7 @@ name: release
 # the run's artifact. With "publish" ticked it also tags the commit vX.Y.Z, makes a GitHub release with the packages and,
 # when the repository has a NUGET_API_KEY secret, pushes them to nuget.org.
 #
-# Run it from the Actions tab (Run workflow) on the default branch. A push that changes this file runs it as a dry run
+# Run it from the Actions tab (Run workflow) on the default branch. A push that changes this file or its scripts runs it as a dry run
 # (patch, nothing published), so the workflow can be tried on a branch.
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ on:
         type: boolean
         default: false
   push:
-    paths: [".github/workflows/release.yml"]
+    paths: [".github/workflows/release.yml", "scripts/pack.sh", "scripts/check-packages.py", "scripts/next-version.py"]
 
 permissions:
   contents: write   # the tag and the release

@@ -6,7 +6,10 @@ set -euo pipefail
 version=$1
 out=${2:-artifacts/packages}
 mkdir -p "$out"
-props=(-c Release "-p:Version=$version" "-p:AssemblyVersion=$version.0" "-p:FileVersion=$version.0" -p:EnableWindowsTargeting=true)
+# GeneratePackageOnBuild (set in the projects) is turned off: on a multi-target project dotnet pack then looked for a target's
+# library before that target was built (NU5026 for FastBindings.MAUI's net8.0-android).
+props=(-c Release "-p:Version=$version" "-p:AssemblyVersion=$version.0" "-p:FileVersion=$version.0" -p:EnableWindowsTargeting=true
+       -p:GeneratePackageOnBuild=false)
 maui=()
 [ "${MAUI_CORE_ONLY:-}" = 1 ] && maui=(-p:MauiCoreOnly=true)
 
