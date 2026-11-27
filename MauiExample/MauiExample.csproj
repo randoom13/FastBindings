@@ -1,8 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net7.0-android;net7.0-maccatalyst;net8.0-ios</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net7.0-windows10.0.19041.0</TargetFrameworks>
+		<!-- .NET 8 MAUI, as FastBinding.MAUI (MAUI 7's packages no longer restore) -->
+		<TargetFrameworks>net8.0-android;net8.0-maccatalyst;net8.0-ios</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net8.0-windows10.0.19041.0</TargetFrameworks>
 		<!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
 		<!-- <TargetFrameworks>$(TargetFrameworks);net7.0-tizen</TargetFrameworks> -->
 		<OutputType>Exe</OutputType>
@@ -49,8 +50,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="FastBindings.MAUI" Version="1.1.3" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="7.0.0" />
+		<!-- FastBindings from this repository's FastBinding.MAUI project, with every change since 1.1.3. Once the next
+		     FastBindings.MAUI package is on nuget.org, use it instead: -p:FastBindingsMauiVersion=1.1.4, or set the property
+		     here. -->
+		<ProjectReference Include="..\FastBinding.MAUI\FastBinding.MAUI.csproj" Condition="'$(FastBindingsMauiVersion)' == ''" />
+		<PackageReference Include="FastBindings.MAUI" Version="$(FastBindingsMauiVersion)" Condition="'$(FastBindingsMauiVersion)' != ''" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
 	</ItemGroup>
 
 </Project>

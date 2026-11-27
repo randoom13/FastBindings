@@ -18,6 +18,24 @@ jobs:
       - run: dotnet test FastBinding.MAUI.Tests -c Release -p:MauiCoreOnly=true
 
   # WPF needs Windows
+  maui-example:
+    # MauiExample built against this repository's FastBinding.MAUI (the .NET 8 SDK: newer ones refuse MAUI 8's targets)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        id: dotnet
+        with:
+          dotnet-version: 8.0.x
+      - shell: bash
+        run: dotnet new globaljson --sdk-version "${{ steps.dotnet.outputs.dotnet-version }}" --force
+      - run: dotnet workload install maui
+      - name: build MauiExample (Windows and Android)
+        shell: bash
+        run: |
+          dotnet build MauiExample -c Release -f net8.0-windows10.0.19041.0
+          dotnet build MauiExample -c Release -f net8.0-android
+
   wpf:
     runs-on: windows-latest
     steps:
