@@ -65,5 +65,53 @@ namespace FastBindings.Tests
                 FastBindingsDiagnostics.Logger = null;
             }
         }
+
+        [AvaloniaFact]
+        public void Unset_puts_the_default_back_and_DoNothing_leaves_the_value()
+        {
+            var log = new CollectingLogger();
+            FastBindingsDiagnostics.Logger = log;
+            try
+            {
+                var vm = new QuietModel();
+                using var ui = Ui.Show(new Quiet(), vm);
+                var border = ui.Find<Border>("Unset");
+                Assert.False(border.IsVisible);
+                vm.Visibility = Avalonia.AvaloniaProperty.UnsetValue;
+                Ui.Settle();
+                Assert.True(border.IsVisible);
+                vm.Visibility = false;
+                Ui.Settle();
+                vm.Visibility = Avalonia.Data.BindingOperations.DoNothing;
+                Ui.Settle();
+                Assert.False(border.IsVisible);
+                Assert.Empty(log.Issues);
+            }
+            finally
+            {
+                FastBindingsDiagnostics.Logger = null;
+            }
+        }
+
+        [AvaloniaFact]
+        public void A_view_whose_bindings_start_before_it_is_shown_reports_nothing_once_shown()
+        {
+            var log = new CollectingLogger();
+            FastBindingsDiagnostics.Logger = log;
+            try
+            {
+                var view = new Quiet { DataContext = new QuietModel() };   // its plain bindings start now; the panel's DataContext on showing
+                Ui.Settle();
+                Assert.Empty(log.Issues);
+                using var ui = Ui.Show(view, view.DataContext);
+                Ui.Settle();
+                Assert.Equal("other", ui.Find<TextBlock>("FromOther").Text);
+                Assert.Empty(log.Issues);
+            }
+            finally
+            {
+                FastBindingsDiagnostics.Logger = null;
+            }
+        }
     }
 }

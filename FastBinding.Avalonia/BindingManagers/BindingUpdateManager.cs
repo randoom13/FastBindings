@@ -498,6 +498,10 @@ namespace FastBindings.BindingManagers
                 return true;
             if (!ReflectionUtility.IsValidType(value, property.PropertyType))
             {
+                if (ReferenceEquals(value, AvaloniaProperty.UnsetValue))
+                    return true;   // what an Avalonia converter returns for "the property's default"
+                if (ReferenceEquals(value, Avalonia.Data.BindingOperations.DoNothing))
+                    return false;   // what it returns for "leave the property as it is"
                 if (value == null)
                 {
                     // no value for a property that cannot hold null (a null on the path, a DataContext going away): the property goes

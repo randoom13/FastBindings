@@ -76,13 +76,31 @@ namespace FastBindings.Diagnostics
             if (!(target is Avalonia.StyledElement element) || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
                 return false;
             var type = dataContextType ?? element.DataContext?.GetType();
+            if (type == null)
+                return true;
             var reference = new WeakReference<Avalonia.StyledElement>(element);
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                if (reference.TryGetTarget(out var still) && still.DataContext?.GetType() == type && type != null)
-                    ReportTo(logger, BindingIssueKind.PathNotFound, exception, detail, still, value, type, binding);
-            }, Avalonia.Threading.DispatcherPriority.Background);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => Check(), Avalonia.Threading.DispatcherPriority.Background);
             return true;
+
+            // a control not in a window yet: its parents' own DataContext bindings start when they join it, so it is looked at
+            // again once it does — and never while it is not (nothing of it is seen)
+            void Check()
+            {
+                if (!reference.TryGetTarget(out var still) || still.DataContext?.GetType() != type)
+                    return;
+                if (still is Avalonia.Visual visual && !Avalonia.VisualTree.VisualExtensions.IsAttachedToVisualTree(visual))
+                {
+                    EventHandler<Avalonia.VisualTreeAttachmentEventArgs>? attached = null;
+                    attached = (_, _) =>
+                    {
+                        visual.AttachedToVisualTree -= attached;
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() => Check(), Avalonia.Threading.DispatcherPriority.Background);
+                    };
+                    visual.AttachedToVisualTree += attached;
+                    return;
+                }
+                ReportTo(logger, BindingIssueKind.PathNotFound, exception, detail, still, value, type, binding);
+            }
         }
 
         private static void ReportTo(BindingLogger logger, BindingIssueKind kind, Exception? exception, string? detail, object? target,

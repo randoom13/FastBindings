@@ -4,6 +4,8 @@
   <StackPanel>
     <TextBlock x:Name="NullPath" Text="{f:CommonBinding Child.Name}" />
     <Border x:Name="NullBool" IsVisible="{f:CommonBinding Child.Shown}" Opacity="{f:CommonBinding Child.Shade}" />
+    <!-- what an Avalonia converter returns: UnsetValue (the default), DoNothing (leave it) -->
+    <Border x:Name="Unset" IsVisible="{f:CommonBinding Visibility}" />
     <!-- its child's binding meets the window's view-model before the panel's own DataContext arrives -->
     <StackPanel x:Name="Own" DataContext="{f:CommonBinding Other}">
       <TextBlock x:Name="FromOther" Text="{f:CommonBinding Name}" />

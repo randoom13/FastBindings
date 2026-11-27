@@ -82,5 +82,7 @@ namespace FastBindings.Tests
         private QuietLeaf? _child;
         public QuietLeaf? Child { get => _child; set => Set(ref _child, value); }
         public QuietLeaf Other { get; } = new QuietLeaf { Name = "other" };
+        private object _visibility = false;
+        public object Visibility { get => _visibility; set => Set(ref _visibility, value); }
     }
 }
