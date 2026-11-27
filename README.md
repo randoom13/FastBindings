@@ -3,3 +3,17 @@ FastBindings (Avalonia) - https://www.nuget.org/packages/FastBindings
  FastBindings.WPF        - https://www.nuget.org/packages/FastBindings.WPF_45/ , https://www.nuget.org/packages/FastBindings.WPF_50/
 
 1.1.3 - https://github.com/randoom13/FastBindings/wiki/1.1.3
+
+## Tests
+
+`FastBinding.Avalonia.Tests` runs the bindings in real views on Avalonia's headless platform (Avalonia 11.1, xUnit):
+
+```
+dotnet test FastBinding.Avalonia.Tests
+```
+
+`BugTests` holds one test per bug fixed on this branch (dotted paths, null to an interface property, the two-way start
+for sync and async bindings, hidden parts built, Unsubscribe, the type caches across threads, worker threads with
+DataContext swaps, `CacheStrategy.Simple`); each fails on 1.1.3. `BehaviourTests` covers ordinary use: every value kind,
+DataContext swaps, values before a view is shown, a detached view, a two-way TextBox, converters, fallback and
+TargetNullValue, a change on a worker thread, `IPropertyAccessor` sources, and a closed view being collected.

@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:f="using:FastBindings" x:Class="FastBindings.Tests.Views.Cached">
+  <StackPanel>
+    <TextBlock x:Name="First" Text="{f:CommonBinding Counted, CacheStrategy=Simple}" />
+    <TextBlock x:Name="Second" Text="{f:CommonBinding Counted, CacheStrategy=Simple}" />
+  </StackPanel>
+</UserControl>
