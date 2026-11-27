@@ -7,7 +7,7 @@ Usage: next-version.py patch|minor|major   (prints e.g. 1.1.4)
 """
 import json, re, subprocess, sys, urllib.request
 
-PACKAGES = ["FastBindings", "FastBindings.MAUI", "FastBindings.WPF", "FastBindings.WPF_50", "FastBindings.WPF_45"]
+PACKAGES = ["FastBindings", "FastBindings.MAUI", "FastBindings.WPF_50", "FastBindings.WPF_45"]
 STABLE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
 def published(package):

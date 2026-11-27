@@ -1,4 +1,4 @@
-FastBindings (Avalonia) - https://www.nuget.org/packages/FastBindings  
+﻿FastBindings (Avalonia) - https://www.nuget.org/packages/FastBindings  
  FastBindins.MAUI        - https://www.nuget.org/packages/FastBindings.MAUI/  
  FastBindings.WPF        - https://www.nuget.org/packages/FastBindings.WPF_45/ , https://www.nuget.org/packages/FastBindings.WPF_50/
 
@@ -115,8 +115,8 @@ What is left, from CPU profiles and timing inside FastBindings: each binding add
 
 ## Releasing the packages
 
-`.github/workflows/release.yml` makes the next version of all five packages (`FastBindings`, `FastBindings.MAUI`,
-`FastBindings.WPF`, `FastBindings.WPF_50`, `FastBindings.WPF_45`), all with one version:
+`.github/workflows/release.yml` makes the next version of all four packages (`FastBindings` for Avalonia, `FastBindings.MAUI`,
+`FastBindings.WPF_50` for WPF on .NET 5+ and `FastBindings.WPF_45` for WPF on .NET Framework 4.5), all with one version:
 - **Run it** from the Actions tab: *release* → *Run workflow*, choose which part to raise (patch, minor or major).
 - **The version** is the highest stable version on nuget.org (or tag `vX.Y.Z`) with that part raised: `scripts/next-version.py`.
 - **What it does:** builds and tests everything on Windows (with the MAUI workload, so `FastBindings.MAUI` has its Android,
@@ -126,5 +126,4 @@ What is left, from CPU profiles and timing inside FastBindings: each binding add
   repository has a `NUGET_API_KEY` secret (Settings → Secrets and variables → Actions), pushes them to nuget.org.
 - Locally: `scripts/pack.sh 1.1.4 out` (`MAUI_CORE_ONLY=1` without the MAUI workload), then `scripts/check-packages.py out 1.1.4`.
 
-`FastBindings.WPF` is now packed from `FastBinding.Package/FastBindings.WPF.nuspec` with both WPF libraries; 1.1.3 on nuget.org
-holds only an empty `FastBinding.Package.dll`.
+`FastBindings.WPF` (`FastBinding.Package`) is not released: the WPF packages are `FastBindings.WPF_50` and `FastBindings.WPF_45`.

@@ -1,14 +1,43 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <!-- Packs FastBindings.WPF from FastBindings.WPF.nuspec: the two WPF builds, built first (scripts/pack.sh builds them in Release).
-       The project itself has no code; the version comes from -p:Version (NuspecProperties). -->
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <IsPackable>true</IsPackable>
-    <IncludeBuildOutput>false</IncludeBuildOutput>
-    <NuspecFile>FastBindings.WPF.nuspec</NuspecFile>
-    <NuspecBasePath>$(MSBuildProjectDirectory)</NuspecBasePath>
-    <Version Condition="'$(Version)' == ''">0.0.0-local</Version>
-    <NuspecProperties>version=$(Version)</NuspecProperties>
-    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <TargetFrameworks>net5.0;net4.5;</TargetFrameworks>
+	  <PackageId>FastBindings.WPF</PackageId>
+	  <Company>Amber</Company>
+	  <PackageTags>#Binding #WPF #AsyncBinding</PackageTags>
+	  <FileVersion>1.1.2</FileVersion>
+	  <AssemblyVersion>1.1.3.0</AssemblyVersion>
+	  <NeutralLanguage>en</NeutralLanguage>
+	  <Title>Advanced Fast Binding WPF</Title>
+	  <Description>Advanced Bindings</Description>
+	  <Authors>Chronos</Authors>
+	  <Owners>O.Kl</Owners>
+         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+	  <Version>1.1.5</Version>
+	  <RepositoryUrl>https://github.com/randoom13/FastBindings</RepositoryUrl>
   </PropertyGroup>
+	<ItemGroup>
+		<!-- Reference for .NET Framework 4.5 -->
+		<Reference Include="FastBinding.Net4.5">
+			<HintPath>..\FastBinding.Net4.5\bin\Release\FastBinding.Net4.5.dll</HintPath>
+			<Private>true</Private>
+			<!-- Ensure it's copied to the output directory during build -->
+		</Reference>
+
+		<!-- Reference for .NET 5 -->
+		<Reference Include="FastBinding.Net5">
+			<HintPath>..\FastBinding.Net5\bin\Release\net5.0-windows\FastBinding.Net5.dll</HintPath>
+			<Private>true</Private>
+			<!-- Ensure it's copied to the output directory during build -->
+		</Reference>
+	</ItemGroup>
+<ItemGroup>
+  <None Update="..\FastBinding.Net5\bin\Release\net5.0-windows\FastBinding.Net5.dll">
+    <Pack>true</Pack>
+    <PackagePath>lib\net5.0\</PackagePath>
+  </None>
+  <None Update="..\FastBinding.Net4.5\bin\Release\FastBinding.Net4.5.dll">
+    <Pack>true</Pack>
+    <PackagePath>lib\net4.5\</PackagePath>
+  </None>
+</ItemGroup>
 </Project>

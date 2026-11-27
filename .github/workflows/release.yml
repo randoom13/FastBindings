@@ -1,7 +1,7 @@
 name: release
 
-# Makes the next version of the five FastBindings packages (FastBindings, FastBindings.MAUI, FastBindings.WPF,
-# FastBindings.WPF_50, FastBindings.WPF_45), all with one version: the highest stable version on nuget.org (or tag vX.Y.Z)
+# Makes the next version of the four FastBindings packages (FastBindings, FastBindings.MAUI, FastBindings.WPF_50 and
+# FastBindings.WPF_45), all with one version: the highest stable version on nuget.org (or tag vX.Y.Z)
 # bumped by the part chosen. Builds and tests everything, packs, checks what each package holds, and keeps the packages as
 # the run's artifact. With "publish" ticked it also tags the commit vX.Y.Z, makes a GitHub release with the packages and,
 # when the repository has a NUGET_API_KEY secret, pushes them to nuget.org.
