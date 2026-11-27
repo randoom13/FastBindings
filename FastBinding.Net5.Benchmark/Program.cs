@@ -36,6 +36,8 @@ namespace WpfBench
     {
         static readonly int Views = int.Parse(Environment.GetEnvironmentVariable("VIEWS") ?? "200");
         static readonly int Rounds = int.Parse(Environment.GetEnvironmentVariable("ROUNDS") ?? "15");
+        // SHARED=0: a view-model per view (an app's usual case) instead of one view-model shared by every view
+        static readonly bool Shared = Environment.GetEnvironmentVariable("SHARED") != "0";
 
         [STAThread]
         public static int Main()
@@ -46,7 +48,7 @@ namespace WpfBench
                 ("classic {Binding}", () => new Classic()),
                 ("FastBindings CommonBinding", () => new Fast()),
             };
-            Console.WriteLine($"[wpf-bench] {Environment.GetEnvironmentVariable("LABEL")} views={Views} bindings/view=30 rounds={Rounds}");
+            Console.WriteLine($"[wpf-bench] {Environment.GetEnvironmentVariable("LABEL")} views={Views} view-models={(Shared ? "one shared" : "one per view")} bindings/view=30 rounds={Rounds}");
             foreach (var (name, make) in kinds)
             {
                 if (only != null && !name.Contains(only)) continue;
@@ -68,13 +70,13 @@ namespace WpfBench
 
         static (double Build, double Bind, double Attach, double Push, double Detach) Run(string name, Func<UserControl> make)
         {
-            var vm = new Vm();
+            var vms = Enumerable.Range(0, Shared ? 1 : Views).Select(_ => new Vm()).ToArray();
             var sw = Stopwatch.StartNew();
             var views = new UserControl[Views];
             for (var i = 0; i < Views; i++) views[i] = make();
             var build = sw.Elapsed.TotalMilliseconds;
             sw.Restart();
-            foreach (var v in views) v.DataContext = vm;
+            for (var i = 0; i < Views; i++) views[i].DataContext = vms[Shared ? 0 : i];
             Settle();
             var bind = sw.Elapsed.TotalMilliseconds;
             sw.Restart();
@@ -88,7 +90,8 @@ namespace WpfBench
             if (label.Text != "s0" || ((TextBlock)((StackPanel)views[^1].Content).Children[1]).Width != 11) throw new Exception($"{name}: wrong values ({label.Text})");
             const int changes = 20;
             sw.Restart();
-            for (var c = 0; c < changes; c++) { vm.S0 = "v" + c; vm.D0 = c; }
+            for (var c = 0; c < changes; c++)
+                foreach (var vm in vms) { vm.S0 = "v" + c; vm.D0 = c; }
             Settle();
             var push = sw.Elapsed.TotalMilliseconds / (changes * 2.0 * Views);
             if (label.Text != "v19") throw new Exception($"{name}: push not applied ({label.Text})");
