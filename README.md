@@ -37,3 +37,16 @@ dotnet run -c Release --project FastBinding.MAUI.Benchmark -p:MauiCoreOnly=true
 
 `VIEWS` and `ROUNDS` set the size, `ONLY` runs the kinds whose name contains it, `DIAG=1` prints `FastBindingsDiagnostics` for one
 round of `CommonBinding`.
+
+`FastBinding.Avalonia.Benchmark` does the same for Avalonia, headless: compiled `{Binding}`, `{ReflectionBinding}` and
+`CommonBinding`, flat and dotted paths (N views of 3 bindings, create, bind, layout, push, layout after and unbind apart, time and
+bytes), after checking that every case shows the same values:
+
+```
+dotnet run -c Release --project FastBinding.Avalonia.Benchmark                  # N=2000 ROUNDS=7
+dotnet run -c Release --project FastBinding.Avalonia.Benchmark -p:BenchAvaloniaVersion=12.0.0   # on Avalonia 12
+MODE=checks dotnet run -c Release --project FastBinding.Avalonia.Benchmark      # the fixes' checks only
+```
+
+`MODE=warmup CASE=compiled|fastbindings-common|fastbindings-accessor|reflection` shows what a binding costs on its first and later
+calls; `MODE=push CASE=…` only pushes, for SECONDS, for a CPU profile.
