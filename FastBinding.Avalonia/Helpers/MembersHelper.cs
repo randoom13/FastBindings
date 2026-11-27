@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.CompilerServices;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -56,7 +56,7 @@ namespace FastBindings.Helpers
             if (_propertyByNames.TryGetValue(propertyName, out var propertyInfo))
                 return propertyInfo;
             return _propertyByNames.GetOrAdd(propertyName,
-                name => new PropertyInfoResult(_propertyInfos.Value.FirstOrDefault(it => it.Name == name)));
+                name => new PropertyInfoResult(_propertyInfos.Value.FirstOrDefault(it => it.Name == name), name, TargetType));
         }
 
         /// <summary>The getter and setter of one property of this type, looked up once (a binding keeps it per source type).</summary>

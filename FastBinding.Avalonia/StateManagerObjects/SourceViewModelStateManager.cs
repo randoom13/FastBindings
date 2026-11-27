@@ -1,4 +1,5 @@
-﻿using Avalonia;
+using Avalonia;
+using FastBindings.Diagnostics;
 using FastBindings.Helpers;
 using System;
 using System.Runtime.CompilerServices;
@@ -24,7 +25,7 @@ namespace FastBindings.StateManagerObjects
         Task<object?> GetSourcePropertyAsync(object? dataContext, bool isWrapException);
     }
 
-    internal class SourceViewModelStateManager<T> : ISourceStateManager, IAsyncSourceStateManager, IListenable
+    internal class SourceViewModelStateManager<T> : ISourceStateManager, IAsyncSourceStateManager, IListenable, IDescribedSource
     {
         private bool _updatingViewModel = false;
 
@@ -35,6 +36,9 @@ namespace FastBindings.StateManagerObjects
         private IViewModelTreeHelper<T>? _viewModelTree;
 
         public bool SupportAsync { get; set; } = false;
+
+        /// <summary>The binding this source belongs to, for reporting what happens in its handlers (null while no logger is set).</summary>
+        public BindingDescription? Description { get; set; }
 
         public SourceViewModelStateManager(string propertyName, AvaloniaObject targetObject,
             DataContextParams dataContextParms)
@@ -95,12 +99,12 @@ namespace FastBindings.StateManagerObjects
                 }
                 catch (Exception ex)
                 {
-                    return ExceptionUtility.Wrap(ex, isWrapException, StateManagerFactory.ErrorMessage);
+                    return ExceptionUtility.Wrap(ex, isWrapException, StateManagerFactory.ErrorMessage, binding: Description);
                 }
             }
             return ExceptionUtility.Handle(() =>
             _viewModelTree?.GetViewModelProperty(_propertyNamePath, dataContext),
-            isWrapException, StateManagerFactory.ErrorMessage);
+            isWrapException, StateManagerFactory.ErrorMessage, binding: Description);
         }
 
         public Task<object?> GetSourcePropertyAsync(object? dataContext, bool isWrapException)
@@ -109,7 +113,7 @@ namespace FastBindings.StateManagerObjects
                 return Task.FromResult(dataContext);
             return ExceptionUtility.AsyncHandle(() =>
                   _viewModelTree?.GetViewModelProperty(_propertyNamePath, dataContext),
-                isWrapException, StateManagerFactory.AsyncErrorMessage);
+                isWrapException, StateManagerFactory.AsyncErrorMessage, Description);
         }
 
         public void SetSourceProperty(object? value)
@@ -156,6 +160,7 @@ namespace FastBindings.StateManagerObjects
         {
             if (_updatingViewModel || finalPropertyInfo == null)
                 return;
+            using var scope = BindingLog.Enter(Description, _targetObjectRef?.Target);
             if (DirectPush != null && Cache == null && !SupportAsync && finalPropertyInfo.Accessor is object last
                 && DirectPush(last, finalPropertyInfo.Name))
                 return;
@@ -177,10 +182,8 @@ namespace FastBindings.StateManagerObjects
             }
             catch (Exception ex)
             {
-                var header = SupportAsync ? "[AsyncFastBinding]" : "[FastBinding]";
-                System.Diagnostics.Debug.Write($"{header} An error occurred to {finalPropertyInfo.Name} from {finalPropertyInfo.Accessor}");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.GetterThrew, ex, $"reading {finalPropertyInfo.Name} of {finalPropertyInfo.Accessor?.GetType().Name ?? "null"}",
+                    dataContextType: _dataContext?.GetType(), binding: Description);
                 value = new ExceptionHolder(ex);
                 _propertyUpdatedPublisher.RaiseEvent(this, value);
             }
@@ -197,9 +200,8 @@ namespace FastBindings.StateManagerObjects
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[AsyncFastBinding] An error occurred to {finalPropertyInfo.Name} from {finalPropertyInfo.Accessor}");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.AsyncSourceFaulted, ex, $"awaiting {finalPropertyInfo.Name} of {finalPropertyInfo.Accessor?.GetType().Name ?? "null"}",
+                    dataContextType: _dataContext?.GetType(), binding: Description);
                 value = new ExceptionHolder(ex);
                 _propertyUpdatedPublisher.RaiseEvent(this, value);
             }

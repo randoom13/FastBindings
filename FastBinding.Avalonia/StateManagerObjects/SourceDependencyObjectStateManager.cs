@@ -1,4 +1,5 @@
-﻿using Avalonia;
+using Avalonia;
+using FastBindings.Diagnostics;
 using FastBindings.Helpers;
 using System;
 using System.Reactive.Linq;
@@ -31,6 +32,9 @@ namespace FastBindings.StateManagerObjects
             _optional = optional;
         }
 
+        /// <summary>The binding this source belongs to (null while no logger is set).</summary>
+        internal BindingDescription? Description { get; set; }
+
         private PropertyInfoResult GetPropertyInfo()
         {
             var source = _sourceObjectRef.Target as AvaloniaObject;
@@ -61,7 +65,7 @@ namespace FastBindings.StateManagerObjects
                 var result = source.GetValue(property);
                 return (string.IsNullOrEmpty(_optional) ||
                     CommonViewModelTreeHelper.TryCalculateValue(_optional, ref result)) ? result : default;
-            }, isWrapException, StateManagerFactory.ErrorMessage);
+            }, isWrapException, StateManagerFactory.ErrorMessage, binding: Description);
         }
 
         public void SetSourceProperty(object? value)
@@ -74,8 +78,12 @@ namespace FastBindings.StateManagerObjects
             var source = _sourceObjectRef.Target as AvaloniaObject;
             var property = _sourcePropertyRef.Target as AvaloniaProperty;
 
-            if (source == null || property == null || !ReflectionUtility.IsValidType(value, property.PropertyType))
+            if (source == null || property == null)
+                return;
+            if (!ReflectionUtility.IsValidType(value, property.PropertyType))
             {
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.WriteBackTypeMismatch, detail: $"{source.GetType().Name}.{property.Name} is {property.PropertyType.Name}, the value is {value?.GetType().Name ?? "null"}",
+                    target: source, value: value, binding: Description);
                 return;
             }
             ExceptionUtility.Handle(() =>
@@ -94,7 +102,7 @@ namespace FastBindings.StateManagerObjects
                 {
                     _updatingDependObj = false;
                 }
-            }, true, StateManagerFactory.ErrorMessage);
+            }, true, $"writing back to {source.GetType().Name}.{property.Name}", BindingIssueKind.SetterThrew, Description);
         }
 
         public void Subscribe(object? dataContext)
@@ -124,12 +132,13 @@ namespace FastBindings.StateManagerObjects
             var property = _sourcePropertyRef.Target as AvaloniaProperty;
             if (source != null && property != null)
             {
+                using var scope = BindingLog.Enter(Description, source);
                 var ans = ExceptionUtility.Handle(() =>
                 {
                     var result = source.GetValue(property!);
                     return string.IsNullOrEmpty(_optional) ||
                                CommonViewModelTreeHelper.TryCalculateValue(_optional, ref result) ? result : default;
-                }, true, StateManagerFactory.ErrorMessage);
+                }, true, StateManagerFactory.ErrorMessage, binding: Description);
                 _propertyUpdatedPublisher.RaiseEvent(this, ans);
             }
         }

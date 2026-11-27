@@ -1,4 +1,4 @@
-﻿
+
 > FastBinding, AsyncFastBinding, CommonBinding, AsyncCommonBinding,
 OneWayFastBinding, AsyncOneWayFastBinding, OneWayCommonBinding, AsyncOneWayCommonBinding
 
@@ -170,6 +170,28 @@ Examples:
                 <TextBlock Text="{custom:FastBinding Mod.MyProperty;MyProperty2;$[[ListBox/1].ActualWidth], CacheStrategy=Simple,ConverterName=Test, ConverterPath=Mod}" />
 <TextBox Text="{custom:AsyncFastBinding Mod.Test, NotificationName =UU, NotificationPath=Mod}" />
 ```
+
+[Diagnostics] — what goes wrong in a binding
+-----------------------------------------------
+Set a logger before views load; every problem a binding meets is reported to it, with the binding's description
+(the view's file, the target type and property, the binding's parameters as written):
+```csharp
+public sealed class MyBindingLogger : FastBindings.Diagnostics.BindingLogger
+{
+    public override void Warning(BindingIssue issue) => Console.WriteLine("binding warning: " + issue);
+    public override void Error(BindingIssue issue) => Console.WriteLine("binding error: " + issue);
+    // public override void Trace(BindingIssue issue) — fast paths that fell back to the general one, for tuning
+}
+
+FastBindingsDiagnostics.Logger = new MyBindingLogger();   // null (the default): nothing is described or reported
+```
+e.g. `GetterThrew · MainView.axaml · TextBlock.Text ← {CommonBinding Title} · element 'Header' · DataContext MainViewModel · InvalidOperationException: …`
+Kinds (BindingIssueKind): errors GetterThrew, SetterThrew, ForwardConverterThrew, BackConverterThrew, TargetRefusedValue,
+MethodTargetThrew, EventSourceFailed, AsyncSourceFaulted, NotificationFilterThrew, SourcesInvalid; warnings PathNotFound,
+NoGetter, NoSetter, WriteBackTypeMismatch, ValueNotAssignable, AncestorNotFound (ParentNotFound on MAUI); trace FastPathUnavailable.
+Equal declarations share one description (a row template is one, not one per row), and an issue is reported the 1st, 10th,
+100th … time it recurs (`issue.Occurrences`). A logger is called on the thread the binding ran on, and an exception it
+throws is dropped. A name that is not a property shows the binding's FallBackValue (it showed "False").
 
 #FIXED
 It will work

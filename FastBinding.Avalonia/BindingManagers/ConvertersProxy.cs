@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using FastBindings.Interfaces;
 using FastBindings.Helpers;
@@ -26,9 +26,17 @@ namespace FastBindings.BindingManagers
                 return default;
 
             if (string.IsNullOrEmpty(ConverterPath))
+            {
+                if (!(dataContext is IValueConverterBase))
+                    if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.PathNotFound,
+                        detail: $"ConverterName '{ConverterName}' without ConverterPath or Converter: the DataContext ({dataContext.GetType().Name}) is no converter");
                 return dataContext is TConverter ? (TConverter)dataContext : default;
+            }
 
             var result = _viewModelTree.GetFinalViewModel(dataContext, ConverterPath);
+            if (!(result is IValueConverterBase))   // nothing at ConverterPath converts (one direction missing is no problem)
+                if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.PathNotFound,
+                    detail: $"ConverterPath '{ConverterPath}' on {dataContext.GetType().Name} is {(result == null ? "null" : result.GetType().Name + ", no converter")}");
             return result is TConverter ? (TConverter)result : default;
         }
 

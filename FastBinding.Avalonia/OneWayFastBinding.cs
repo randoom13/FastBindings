@@ -1,4 +1,4 @@
-﻿using Avalonia.Controls;
+using Avalonia.Controls;
 using FastBindings.BindingManagers;
 using FastBindings.Helpers;
 using FastBindings.Interfaces;
@@ -103,6 +103,7 @@ namespace FastBindings
             {
                 throw new ArgumentException(nameof(control));
             }
+            _updateManager.Description = Diagnostics.BindingDescriptions.For(this, control.GetType().Name, "Target=" + Target, null);
             control.Loaded += OnTargetLoaded;
         }
 

@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Data;
 using System;
 using FastBindings;
@@ -75,7 +75,7 @@ namespace FastBindings.BindingManagers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[FastBinding] No direct path for {key.Source.Name}.{key.Name} -> {key.Property.Name}: {ex.Message}");
+                if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.FastPathUnavailable, ex, $"no direct path for {key.Source.Name}.{key.Name} -> {key.Property.Name}");
                 return null;
             }
         }

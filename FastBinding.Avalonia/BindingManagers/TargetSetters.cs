@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Data;
 using System;
 using FastBindings;
@@ -62,8 +62,7 @@ namespace FastBindings.BindingManagers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[FastBinding] Failed to create a typed setter for {property.Name}");
-                System.Diagnostics.Debug.Write(ex);
+                if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.FastPathUnavailable, ex, $"no typed setter for {property.Name}");
                 return Untyped(property);
             }
         }

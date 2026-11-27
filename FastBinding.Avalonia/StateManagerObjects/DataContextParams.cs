@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.VisualTree;
 using FastBindings.Helpers;
 using System;
@@ -39,7 +39,12 @@ namespace FastBindings.StateManagerObjects
                 return element;
             }
 
-            return PropertyPathParser.CalculateSource(AnchorObject ?? target, DataContextSource) ?? target;
+            var source = PropertyPathParser.CalculateSource(AnchorObject ?? target, DataContextSource);
+            if (source != null)
+                return source;
+            // reads the control's own DataContext instead (as before), and says so
+            if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.AncestorNotFound, detail: $"DataContextSource '{DataContextSource}' from {target.GetType().Name}", target: target);
+            return target;
         }
 
         public object? GetDataContext(AvaloniaObject target)

@@ -1,6 +1,7 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using FastBindings.Diagnostics;
 using FastBindings.Helpers;
 using FastBindings.Interfaces;
 using FastBindings.StateManagerObjects;
@@ -27,6 +28,12 @@ namespace FastBindings.BindingManagers
         private readonly NotificationProxy<IBaseNotificationFilter, T> _notificationProxy;
 
         public string Sources { get; set; } = string.Empty;
+
+        /// <summary>What this binding reports its problems as (null while no logger is set). Passed explicitly in the async methods:
+        /// a thread's scope would end on whatever thread an await resumes on.</summary>
+        internal BindingDescription? Description { get; set; }
+
+        private string ConverterDetail() => $"converter {(_convertersProxy.Converter?.GetType().Name ?? _convertersProxy.ConverterPath ?? "")}{(_convertersProxy.ConverterName != null ? " '" + _convertersProxy.ConverterName + "'" : "")}";
 
         public string? NotificationPath
         {
@@ -95,6 +102,7 @@ namespace FastBindings.BindingManagers
         public void Initialize(object sender, CacheStrategy cacheStrategy)
         {
             _initializing = true;
+            using var scope = BindingLog.Enter(Description, _targetObjectRef?.Target);   // a sync method: the async ones it starts run their first part inside it
             try
             {
                 InitializeCore(sender, cacheStrategy);
@@ -114,10 +122,10 @@ namespace FastBindings.BindingManagers
                 return;
             }
 
-            _sourceStateManagers = StateManagerFactory.Build(Sources, targetObject, _dataContextParams, cacheStrategy, _treeHelper);
+            _sourceStateManagers = StateManagerFactory.Build(Sources, targetObject, _dataContextParams, cacheStrategy, _treeHelper, Description);
             if (!_sourceStateManagers.Any())
             {
-                System.Diagnostics.Debug.Write("[AsyncFastBinding] Could not create managers");
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.SourcesInvalid, detail: "no source in '" + Sources + "'", target: targetObject, binding: Description);
                 return;
             }
             foreach (var stateManager in _sourceStateManagers.OfType<IAsyncSourceStateManager>())
@@ -161,7 +169,6 @@ namespace FastBindings.BindingManagers
             }
             if (dataContext == null)
             {
-                System.Diagnostics.Debug.Write("[AsyncFastBinding] No dataContext");
                 UpdateTarget(initialTarget, targetProperty, TargetNullValue ?? AvaloniaProperty.UnsetValue);
             }
             else UpdateTarget(dataContext, sender, targetProperty, initialTarget);
@@ -187,10 +194,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[AsyncFastBinding] An error occurred on binding to {target}.{targetProperty} on " +
-                        $"converter {_convertersProxy.ConverterName ?? "None"} during intialization");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ForwardConverterThrew, ex, ConverterDetail(), target, dataContextType: dataContext?.GetType(), binding: Description);
                     value = new ExceptionHolder(ex);
                 }
             }
@@ -228,6 +232,7 @@ namespace FastBindings.BindingManagers
             var dispatcher = Dispatcher.UIThread;
             if (dispatcher.CheckAccess())
             {
+                using var scope = BindingLog.Enter(Description, _targetObjectRef?.Target);
                 OnViewModelValueUpdatedAsync(target, property, sender, value);
             }
             else
@@ -262,9 +267,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[AsyncFastBinding] An error occurred while attempting to prepare data for update {target}.{property}");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ForwardConverterThrew, ex, ConverterDetail(), target, value, dataContext?.GetType(), Description);
                     value = new ExceptionHolder(ex);
                 }
             }
@@ -304,6 +307,7 @@ namespace FastBindings.BindingManagers
             }
 
             var dataContext = dataContextTarget.GetValue(StyledElement.DataContextProperty);
+            using var scope = BindingLog.Enter(Description, _targetObjectRef?.Target);
             UpdateTargetAsync(dataContext, sender, target, property);
         }
 
@@ -347,9 +351,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[AsyncFastBinding] An error occurred while attempting to calculate value in converter for {target}.{property}");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ForwardConverterThrew, ex, ConverterDetail(), target, dataContextType: dataContext?.GetType(), binding: Description);
                     value = new ExceptionHolder(ex);
                 }
             }
@@ -375,9 +377,7 @@ namespace FastBindings.BindingManagers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[AsyncFastBinding] An error occurred while attempting to update {target}.{property}");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.NotificationFilterThrew, ex, "notification " + (_notificationProxy.NotificationName ?? ""), target, value, dataContext?.GetType(), Description);
             }
         }
 
@@ -391,8 +391,16 @@ namespace FastBindings.BindingManagers
         private bool CanTrackOnlyTargetChanges =>
             Mode == BindingMode.OneWayToSource;
 
-        private static bool CanUpdateTarget(AvaloniaProperty property, object? value)
-            => !(value is ExceptionHolder) && ReflectionUtility.IsValidType(value, property.PropertyType);
+        private bool CanUpdateTarget(AvaloniaProperty property, object? value)
+        {
+            if (value is ExceptionHolder)
+                return false;
+            if (ReflectionUtility.IsValidType(value, property.PropertyType))
+                return true;
+            if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ValueNotAssignable, detail: $"{property.Name} is {property.PropertyType.Name}, the value is {value?.GetType().Name}",
+                target: _targetObjectRef.Target, value: value, binding: Description);
+            return false;
+        }
 
         private void UpdateTarget(AvaloniaObject target, AvaloniaProperty property, object? value)
         {
@@ -400,6 +408,10 @@ namespace FastBindings.BindingManagers
             try
             {
                 target.SetValue(property, value);
+            }
+            catch (Exception ex)
+            {
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.TargetRefusedValue, ex, $"setting {target.GetType().Name}.{property.Name}", target, value, binding: Description);
             }
             finally
             {
@@ -419,33 +431,48 @@ namespace FastBindings.BindingManagers
             {
                 return;
             }
-            try
+            object? dataContext;
+            object? targetValue;
+            object? val;
+            using (BindingLog.Enter(Description, _targetObjectRef?.Target))   // the part before the first await
             {
-                var dataContext = _dataContextParams.GetDataContext(_dataContextParams.GetDataContextTarget(target));
+                dataContext = _dataContextParams.GetDataContext(_dataContextParams.GetDataContextTarget(target));
+                targetValue = target.GetValue(property);
+                val = targetValue;
                 var backConverterFunc = _convertersProxy.FindBackConverter(dataContext);
-                var targetValue = target.GetValue(property);
-                object? val = targetValue;
                 if (backConverterFunc != null)
                 {
-                    var args = new ConverterBackArgs()
+                    try
                     {
-                        Value = targetValue
-                    };
-                    val = backConverterFunc(args);
-
+                        val = backConverterFunc(new ConverterBackArgs() { Value = targetValue });
+                    }
+                    catch (Exception ex)
+                    {
+                        if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.BackConverterThrew, ex, ConverterDetail(), target, targetValue, dataContext?.GetType(), Description);
+                        return;
+                    }
                 }
-                var ars = NotificationArgs.CreateFromTarget(target, val);
-                if (await NeedNotifyAsync(dataContext, ars, true))
-                {
-                    UpdateSource(val);
-                    await NeedNotifyAsync(dataContext, ars, false);
-                }
+            }
+            var ars = NotificationArgs.CreateFromTarget(target, val);
+            try
+            {
+                if (!await NeedNotifyAsync(dataContext, ars, true))
+                    return;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[AsyncFastBinding] An error occurred while attempting to update for {target}.{property} during dependency property changing");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.NotificationFilterThrew, ex, "notification " + (_notificationProxy.NotificationName ?? ""), target, val, dataContext?.GetType(), Description);
+                return;
+            }
+            using (BindingLog.Enter(Description, _targetObjectRef?.Target))
+                UpdateSource(val);
+            try
+            {
+                await NeedNotifyAsync(dataContext, ars, false);
+            }
+            catch (Exception ex)
+            {
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.NotificationFilterThrew, ex, "notification " + (_notificationProxy.NotificationName ?? ""), target, val, dataContext?.GetType(), Description);
             }
         }
 
@@ -482,9 +509,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[AsyncFastBinding] An error occurred while attempting to set source property");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.SetterThrew, ex, "writing back to the source", _targetObjectRef.Target, values.ElementAtOrDefault(index), binding: Description);
                 }
                 finally
                 {

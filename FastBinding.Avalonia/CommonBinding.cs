@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.XamlIl.Runtime;
@@ -45,6 +45,7 @@ namespace FastBindings
             }
             if (visualElement != null)
             {
+                Description = Diagnostics.BindingDescriptions.For(this, targetObject.GetType().Name, targetProperty.Name, serviceProvider);
                 ApplyTarget(targetObject, targetProperty, anchorObj);
                 // Start when the element joins the visual tree, before its first layout — not on Loaded, which comes after it:
                 // until then IsVisible bindings still read true, so a view's hidden parts were measured once and their item
@@ -66,6 +67,9 @@ namespace FastBindings
             }
             return AvaloniaProperty.UnsetValue;
         }
+
+        /// <summary>What this binding reports its problems as; null while no logger is set (see <see cref="FastBindingsDiagnostics.Logger"/>).</summary>
+        internal Diagnostics.BindingDescription? Description;
 
         /// <summary>Whether this binding may start on its control's first DataContext change, before it joins the visual tree.</summary>
         internal virtual bool StartsWithDataContext => false;
@@ -260,6 +264,7 @@ namespace FastBindings
 
         internal override void ApplyTarget(AvaloniaObject targetObject, AvaloniaProperty targetProperty, AvaloniaObject? dataContextObj)
         {
+            _updateManager.Description = Description;
             _updateManager.ApplyTargets(targetObject, targetProperty, dataContextObj);
         }
 
