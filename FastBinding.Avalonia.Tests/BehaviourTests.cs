@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -141,7 +141,9 @@ namespace FastBindings.Tests
         {
             var vm = new Vm();
             var weak = ShowAndClose(vm);
-            for (var i = 0; i < 3; i++)
+            // Up to ten rounds: on a Windows runner the headless dispatcher sometimes still held the closed view after three
+            // (one CI run of several); a view kept alive by its bindings stays alive through all of them.
+            for (var i = 0; i < 10 && weak.IsAlive; i++)
             {
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
