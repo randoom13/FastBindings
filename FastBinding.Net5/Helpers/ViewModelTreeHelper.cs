@@ -40,6 +40,17 @@ namespace FastBindings.Helpers
 
         public const string PropertyLevelMark = ".";
 
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string[]> SegmentsByPath =
+            new System.Collections.Concurrent.ConcurrentDictionary<string, string[]>(StringComparer.Ordinal);
+
+        /// <summary>A property path's names, split once per path string and shared (never changed by callers).</summary>
+        public static string[] Segments(string propertyPath)
+        {
+            if (SegmentsByPath.TryGetValue(propertyPath, out var segments))
+                return segments;
+            return SegmentsByPath.GetOrAdd(propertyPath, p => p.Split(new[] { PropertyLevelMark }, StringSplitOptions.RemoveEmptyEntries));
+        }
+
         private const char MethodMark = '(';
 
         public static bool TryCalculateValue(string propertyPath, ref object? target)

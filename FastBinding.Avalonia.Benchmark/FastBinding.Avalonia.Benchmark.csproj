@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Compiled {Binding}, {ReflectionBinding} and FastBindings' CommonBinding on the same views, headless; and the checks
+       (MODE=checks), first-call costs (MODE=warmup) and a push loop for profiling (MODE=push). See README.md. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>AvaloniaBench</RootNamespace>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+    <!-- the Avalonia the benchmark runs on; the library stays built against $(AvaloniaVersion) (-p:BenchAvaloniaVersion=12.0.0) -->
+    <BenchAvaloniaVersion Condition="'$(BenchAvaloniaVersion)' == ''">$(AvaloniaVersion)</BenchAvaloniaVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(BenchAvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Headless" Version="$(BenchAvaloniaVersion)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FastBinding.Avalonia\FastBinding.Avalonia.csproj" />
+  </ItemGroup>
+</Project>

@@ -93,7 +93,24 @@ namespace FastBindings.BindingManagers
             _dataContextParams.AnchorObject = dataContextObj;
         }
 
+        // While Initialize runs, a change of the target is not written to the source (as BindingUpdateManager).
+        private bool _initializing;
+        private TargetWatcher? _watcher;
+
         public void Initialize(object sender, CacheStrategy cacheStrategy)
+        {
+            _initializing = true;
+            try
+            {
+                InitializeCore(sender, cacheStrategy);
+            }
+            finally
+            {
+                _initializing = false;
+            }
+        }
+
+        private void InitializeCore(object sender, CacheStrategy cacheStrategy)
         {
             var targetObject = _targetObjectRef.Target as DependencyObject;
             var targetProperty = _targetPropertyRef.Target as DependencyProperty;
@@ -116,8 +133,9 @@ namespace FastBindings.BindingManagers
 
             if (CanTrackTargetChanges && ReflectionUtility.BildPropertyInfo(targetObject, targetProperty.Name).HasGetter)
             {
-                DependencyPropertyDescriptor.FromProperty(targetProperty, initialTarget.GetType())
-                .AddValueChanged(initialTarget, OnDependencyPropertyChangedAsync);
+                // not DependencyPropertyDescriptor.AddValueChanged: it kept the view alive for the life of the process (TargetWatcher)
+                _watcher?.Stop();
+                _watcher = TargetWatcher.Watch(initialTarget, targetProperty, _ => OnDependencyPropertyChangedAsync());
             }
 
             var targetContextObject = _dataContextParams.GetDataContextTarget(targetObject);
@@ -144,7 +162,7 @@ namespace FastBindings.BindingManagers
             {
                 foreach (var stateManager in _sourceStateManagers)
                 {
-                    stateManager.PropertyUpdated += OnViewModelValueUpdated;
+                    stateManager.ListenTo(this, Updated, OnViewModelValueUpdated);
                     stateManager.Subscribe(dataContext);
                 }
             }
@@ -199,6 +217,9 @@ namespace FastBindings.BindingManagers
             return FallBackValue ?? val;
         }
 
+        // the listener for the source state managers, made once for every binding (see WeakEventPublisher.Listen)
+        private static readonly Action<object, object, object?> Updated = (manager, sender, value) => ((AsyncBindingUpdateManager<T>)manager).OnViewModelValueUpdated(sender, value!);
+
         private void OnViewModelValueUpdated(object? sender, object value)
         {
             if (_updatingSource)
@@ -219,7 +240,7 @@ namespace FastBindings.BindingManagers
             else
             {
                 Action action = () => OnViewModelValueUpdatedAsync(target, property, sender, value);
-                dispatcher.Invoke(DispatcherPriority.Render, action);
+                dispatcher.BeginInvoke(DispatcherPriority.Render, action);   // never waited for (Invoke could deadlock)
             }
         }
 
@@ -394,9 +415,9 @@ object? dataContext)
             }
         }
 
-        private async void OnDependencyPropertyChangedAsync(object? sender, EventArgs e)
+        private async void OnDependencyPropertyChangedAsync()
         {
-            if (_updatingTarget)
+            if (_updatingTarget || _initializing)
                 return;
 
             var target = _targetObjectRef.Target as DependencyObject;

@@ -13,11 +13,17 @@ namespace FastBindings.Helpers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write(errorMessage);
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
-                return isWrapException ? new ExceptionHolder(ex) : ex;
+                return Wrap(ex, isWrapException, errorMessage);
             }
+        }
+
+        /// <summary>What <see cref="Handle"/> returns for an exception, for callers that catch it themselves (no closure per call).</summary>
+        internal static object Wrap(Exception ex, bool isWrapException, string errorMessage)
+        {
+            System.Diagnostics.Debug.Write(errorMessage);
+            System.Diagnostics.Debug.Write(ex);
+            System.Diagnostics.Debug.Write(ex.StackTrace);
+            return isWrapException ? new ExceptionHolder(ex) : ex;
         }
 
         internal static async Task<object?> AsyncHandle(Func<object?> func, bool isWrapException, string errorMessage)

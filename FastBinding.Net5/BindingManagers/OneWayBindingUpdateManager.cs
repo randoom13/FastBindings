@@ -101,7 +101,7 @@ namespace FastBindings.BindingManagers
 
             foreach (var stateManager in _sourceStateManagers)
             {
-                stateManager.PropertyUpdated += OnViewModelValueUpdated;
+                stateManager.ListenTo(this, Updated, OnViewModelValueUpdated);
                 stateManager.Subscribe(dataContext);
             }
 
@@ -140,13 +140,17 @@ namespace FastBindings.BindingManagers
                 UpdateTarget(initialTarget, value);
         }
 
+        // only a failure shows FallBackValue (the test was inverted)
         private object? CalculateValue(object? val)
         {
-            if (!CanUpdateTarget(val))
+            if (CanUpdateTarget(val))
                 return val ?? TargetNullValue;
 
             return FallBackValue ?? val;
         }
+
+        // the listener for the source state managers, made once for every binding (see WeakEventPublisher.Listen)
+        private static readonly Action<object, object, object?> Updated = (manager, sender, value) => ((OneWayBindingUpdateManager<T>)manager).OnViewModelValueUpdated(sender, value!);
 
         private void OnViewModelValueUpdated(object? sender, object value)
         {
@@ -167,7 +171,7 @@ namespace FastBindings.BindingManagers
             else
             {
                 Action action = () => OnViewModelValueUpdated(target, sender, value);
-                dispatcher.Invoke(DispatcherPriority.Render, action);
+                dispatcher.BeginInvoke(DispatcherPriority.Render, action);   // never waited for (Invoke could deadlock)
             }
         }
 

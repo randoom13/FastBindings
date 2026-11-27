@@ -1,112 +1,22 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- FastBindings for WPF on .NET Framework 4.5 (package FastBindings.WPF_45, FastBindings.WPF_45.nuspec). The same code as
+       FastBinding.Net5, in files of its own; an SDK-style project so that dotnet build builds it on any machine. -->
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{6B601FA2-EA4A-45D9-9BC1-0754BF88A9DE}</ProjectGuid>
-    <OutputType>library</OutputType>
+    <TargetFramework>net45</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RootNamespace>FastBindings</RootNamespace>
     <AssemblyName>FastBinding.Net4.5</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-    <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
-    <WarningLevel>4</WarningLevel>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <LangVersion>9</LangVersion>
+    <Nullable>enable</Nullable>
     <Deterministic>true</Deterministic>
-    <TargetFrameworkProfile />
-    <Nullable>disable</Nullable>
-    <LangVersion>8</LangVersion>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>5</WarningLevel>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup>
-    <SignAssembly>true</SignAssembly>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="System" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Xml" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="System.Xaml">
-      <RequiredTargetFramework>4.0</RequiredTargetFramework>
-    </Reference>
-    <Reference Include="WindowsBase" />
-    <Reference Include="PresentationCore" />
-    <Reference Include="PresentationFramework" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="AsyncFastBinding.cs" />
-    <Compile Include="BaseBinding.cs" />
-    <Compile Include="BindingManagers\AsyncBindingUpdateManager.cs" />
-    <Compile Include="BindingManagers\AsyncOneWayBindingUpdateManager.cs" />
-    <Compile Include="AsyncOneWayFastBinding.cs" />
-    <Compile Include="AsyncOneWayCommonBinding.cs" />
-    <Compile Include="AttachedOneWayBindings.cs" />
-    <Compile Include="BindingMode.cs" />
-    <Compile Include="Common\BaseViewModel.cs" />
-    <Compile Include="CacheStratagy.cs" />
-    <Compile Include="BindingManagers\ConvertersProxy.cs" />
-    <Compile Include="StateManagerObjects\DataContextParams.cs" />
-    <Compile Include="CommonBinding.cs" />
-    <Compile Include="FastBinding.cs" />
-    <Compile Include="BindingManagers\BindingUpdateManager.cs" />
-    <Compile Include="Helpers\ExpressionTreeHelper.cs" />
-    <Compile Include="Helpers\MembersHelper.cs" />
-    <Compile Include="Helpers\ExceptionUtility.cs" />
-    <Compile Include="Helpers\FastViewModelTreeHelper.cs" />
-    <Compile Include="Helpers\LightViewModelTreeHelper.cs" />
-    <Compile Include="Helpers\MethodsAccessor.cs" />
-    <Compile Include="Helpers\PropertyInfoResult.cs" />
-    <Compile Include="Helpers\PropertyPathParser.cs" />
-    <Compile Include="Helpers\ReflectionUtility.cs" />
-    <Compile Include="Helpers\SubscriberProxy.cs" />
-    <Compile Include="Helpers\TasksHelper.cs" />
-    <Compile Include="Helpers\ViewModelTreeHelper.cs" />
-    <Compile Include="Helpers\VisualTreeHelperEx.cs" />
-    <Compile Include="Interfaces\ISubscriber.cs" />
-    <Compile Include="BindingManagers\NotificationProxy.cs" />
-    <Compile Include="Interfaces\INotificationFilter.cs" />
-    <Compile Include="Interfaces\IPropertyAccessor.cs" />
-    <Compile Include="Interfaces\IValueConverterBase.cs" />
-    <Compile Include="BindingManagers\OneWayBindingUpdateManager.cs" />
-    <Compile Include="OneWayFastBinding.cs" />
-    <Compile Include="OneWayCommonBinding.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Helpers\ExceptionHolder.cs" />
-    <Compile Include="StateManagerObjects\ICache.cs" />
-    <Compile Include="StateManagerObjects\InvalidSourceStateManager.cs" />
-    <Compile Include="StateManagerObjects\SourceDependencyObjectStateManager.cs" />
-    <Compile Include="StateManagerObjects\SourceEventStateManager.cs" />
-    <Compile Include="StateManagerObjects\SourceViewModelStateManager.cs" />
-    <Compile Include="StateManagerObjects\StateManagerFactory.cs" />
-    <Compile Include="StateManagerObjects\WeakEventHandler.cs" />
-    <Compile Include="StateManagerObjects\WeakEventPublisher.cs" />
-    <Compile Include="BindingManagers\TargetInfo.cs" />
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
   </ItemGroup>
   <ItemGroup>
     <None Include="FastBindings.WPF_45.nuspec" />
   </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

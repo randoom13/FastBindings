@@ -6,10 +6,10 @@ namespace FastBindings.Common
 {
     public abstract class BaseViewModel : INotifyPropertyChanged, IPropertyAccessor
     {
-        public abstract object GetProperty(string propertyName);
-        public abstract void SetProperty(string propertyName, object value);
+        public abstract object? GetProperty(string propertyName);
+        public abstract void SetProperty(string propertyName, object? value);
         // This event is part of the INotifyPropertyChanged interface
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
         // Method to raise the PropertyChanged event
         protected void OnPropertyChanged(string propertyName)
@@ -20,35 +20,35 @@ namespace FastBindings.Common
 
     public class PropertyHolder<T> : IPropertyAccessor
     {
-        public object GetProperty(string propertyName)
+        public object? GetProperty(string propertyName)
         {
             _propertyAccessor = _propertyAccessor ?? MembersHelper.GetPropertyAccessor<T>();
             return _propertyAccessor.GetProperty(this, propertyName);
         }
 
-        public void SetProperty(string propertyName, object value)
+        public void SetProperty(string propertyName, object? value)
         {
             _propertyAccessor = _propertyAccessor ?? MembersHelper.GetPropertyAccessor<T>();
             _propertyAccessor.SetProperty(this, propertyName, value);
         }
 
-        private PropertyAccessor _propertyAccessor;
+        private PropertyAccessor? _propertyAccessor;
     }
 
     public abstract class CommonBaseViewModel<T> : BaseViewModel
     {
-        public override object GetProperty(string propertyName)
+        public override object? GetProperty(string propertyName)
         {
             _propertyAccessor = _propertyAccessor ?? MembersHelper.GetPropertyAccessor<T>();
             return _propertyAccessor.GetProperty(this, propertyName);
         }
 
-        public override void SetProperty(string propertyName, object value)
+        public override void SetProperty(string propertyName, object? value)
         {
             _propertyAccessor = _propertyAccessor ?? MembersHelper.GetPropertyAccessor<T>();
             _propertyAccessor.SetProperty(this, propertyName, value);
         }
 
-       private PropertyAccessor _propertyAccessor;
+       private PropertyAccessor? _propertyAccessor;
     }
 }

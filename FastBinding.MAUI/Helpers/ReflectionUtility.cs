@@ -65,8 +65,10 @@ namespace FastBindings.Helpers
             bool result;
             if (value == null)
             {
-                // check on nullable type
-                result = expectingType == null || (expectingType.IsClass || Nullable.GetUnderlyingType(expectingType) != null);
+                // null fits any type but a non-nullable value type. It was "IsClass", which an interface is not: null was refused for
+                // ItemsSource (IEnumerable), Command (ICommand) and every other interface-typed property, so a list or command whose
+                // source became null — or whose DataContext went away — kept its old value (and a list kept its rows, subscribed).
+                result = expectingType == null || !expectingType.IsValueType || Nullable.GetUnderlyingType(expectingType) != null;
             }
             else
             {

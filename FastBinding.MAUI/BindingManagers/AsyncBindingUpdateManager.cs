@@ -85,7 +85,25 @@ namespace FastBindings.BindingManagers
             _dataContextParams.AnchorObject = anchorObject;
         }
 
+        // While Initialize runs, a change of the target is not written to the source: GetObservable(targetProperty) reports the
+        // target's current value — its default — as soon as it is subscribed, and a two-way binding wrote that into the
+        // view-model before the view-model's value reached the target (as BindingUpdateManager did before).
+        private bool _initializing;
+
         public void Initialize(object sender, CacheStrategy cacheStrategy)
+        {
+            _initializing = true;
+            try
+            {
+                InitializeCore(sender, cacheStrategy);
+            }
+            finally
+            {
+                _initializing = false;
+            }
+        }
+
+        private void InitializeCore(object sender, CacheStrategy cacheStrategy)
         {
             var targetObject = _targetObjectRef.Target as BindableObject;
             var targetProperty = _targetPropertyRef.Target as BindableProperty;
@@ -128,7 +146,7 @@ namespace FastBindings.BindingManagers
             {
                 foreach (var stateManager in _sourceStateManagers)
                 {
-                    stateManager.PropertyUpdated += OnViewModelValueUpdated;
+                    stateManager.ListenTo(this, Updated, OnViewModelValueUpdated);
                     stateManager.Subscribe(dataContext);
                 }
             }
@@ -183,6 +201,9 @@ namespace FastBindings.BindingManagers
 
             return FallBackValue ?? val;
         }
+
+        // the listener for the source state managers, made once for every binding (see WeakEventPublisher.Listen)
+        private static readonly Action<object, object, object?> Updated = (manager, sender, value) => ((AsyncBindingUpdateManager<T>)manager).OnViewModelValueUpdated(sender, value!);
 
         private void OnViewModelValueUpdated(object? sender, object value)
         {
@@ -396,7 +417,7 @@ object? dataContext)
 
         private async void OnDependencyPropertyChangedAsync(object? sender, PropertyChangedEventArgs e)
         {
-            if (_updatingTarget)
+            if (_updatingTarget || _initializing)
             {
                 return;
             }

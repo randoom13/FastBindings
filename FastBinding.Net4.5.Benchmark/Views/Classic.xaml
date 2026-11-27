@@ -1,0 +1,15 @@
+<UserControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:f="clr-namespace:FastBindings;assembly=FastBinding.Net4.5" x:Class="WpfBench.Views.Classic">
+  <StackPanel>
+    <TextBlock Text="{Binding S0}" Width="{Binding D0}" IsEnabled="{Binding B}" />
+    <TextBlock Text="{Binding S1}" Width="{Binding D1}" IsEnabled="{Binding B}" />
+    <TextBlock Text="{Binding S2}" Width="{Binding D2}" IsEnabled="{Binding B}" />
+    <TextBlock Text="{Binding S3}" Width="{Binding D0}" IsEnabled="{Binding B}" />
+    <TextBlock Text="{Binding S4}" Width="{Binding D1}" IsEnabled="{Binding B}" />
+    <TextBlock Text="{Binding S5}" Width="{Binding D2}" IsEnabled="{Binding B}" />
+    <TextBlock Text="{Binding S6}" Width="{Binding D0}" IsEnabled="{Binding B}" />
+    <TextBlock Text="{Binding S7}" Width="{Binding D1}" IsEnabled="{Binding B}" />
+    <TextBlock Text="{Binding S8}" Width="{Binding D2}" IsEnabled="{Binding B}" />
+    <TextBlock Text="{Binding S9}" Width="{Binding D0}" IsEnabled="{Binding B}" />
+  </StackPanel>
+</UserControl>

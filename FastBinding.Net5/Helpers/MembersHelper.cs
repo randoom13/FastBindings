@@ -1,7 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Collections.Concurrent;
 
 namespace FastBindings.Helpers
 {
@@ -15,10 +19,13 @@ namespace FastBindings.Helpers
                 throw new ArgumentException(nameof(targetType));
 
             TargetType = targetType;
+            _propertyInfos = new Lazy<PropertyInfo[]>(() => TargetType.GetProperties(BindingFlags.Public | BindingFlags.Instance));
         }
 
-        private PropertyInfo[]? _propertyInfos;
-        private readonly Dictionary<string, PropertyInfoResult> _propertyByNames = new Dictionary<string, PropertyInfoResult>();
+        // Read and filled from any thread a binding runs on (async bindings, view-models raising PropertyChanged off the UI thread):
+        // a plain Dictionary written by two threads at once can lose entries or loop forever.
+        private readonly Lazy<PropertyInfo[]> _propertyInfos;
+        private readonly ConcurrentDictionary<string, PropertyInfoResult> _propertyByNames = new ConcurrentDictionary<string, PropertyInfoResult>(StringComparer.Ordinal);
 
         private void Verify(object target, string propertyName)
         {
@@ -45,18 +52,19 @@ namespace FastBindings.Helpers
             return info.HasGetter ? info.PropertyType : null;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private PropertyInfoResult GetPropertyInfoResult(string propertyName)
         {
-            PropertyInfoResult? propertyInfo;
-            if (!_propertyByNames.TryGetValue(propertyName, out propertyInfo))
-            {
-                _propertyInfos = _propertyInfos ?? TargetType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-                propertyInfo = new PropertyInfoResult(_propertyInfos?.FirstOrDefault(it => it.Name == propertyName));
-                _propertyByNames[propertyName] = propertyInfo;
-            }
-            return propertyInfo;
+            if (_propertyByNames.TryGetValue(propertyName, out var propertyInfo))
+                return propertyInfo;
+            return _propertyByNames.GetOrAdd(propertyName,
+                name => new PropertyInfoResult(_propertyInfos.Value.FirstOrDefault(it => it.Name == name)));
         }
 
+        /// <summary>The getter and setter of one property of this type, looked up once (a binding keeps it per source type).</summary>
+        internal PropertyInfoResult Find(string propertyName) => GetPropertyInfoResult(propertyName);
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public object? GetProperty(object target, string propertyName)
         {
             Verify(target, propertyName);
@@ -72,31 +80,23 @@ namespace FastBindings.Helpers
 
     internal static class MembersHelper
     {
-        private static Dictionary<Type, PropertyAccessor> _propertyAccessorByType = new Dictionary<Type, PropertyAccessor>();
-        private static Dictionary<Type, MethodsAccessor> _methodAccessorByType = new Dictionary<Type, MethodsAccessor>();
+        // Shared by every binding of the process, whatever thread it runs on.
+        private static readonly ConcurrentDictionary<Type, PropertyAccessor> _propertyAccessorByType = new ConcurrentDictionary<Type, PropertyAccessor>();
+        private static readonly ConcurrentDictionary<Type, MethodsAccessor> _methodAccessorByType = new ConcurrentDictionary<Type, MethodsAccessor>();
 
         public static MethodsAccessor GetMethodAccessor(Type type)
         {
-            MethodsAccessor? accessor = null;
-            if (!_methodAccessorByType.TryGetValue(type, out accessor))
-            {
-                accessor = new MethodsAccessor(type);
-                _methodAccessorByType[type] = accessor;
-            }
-
-            return accessor;
+            if (_methodAccessorByType.TryGetValue(type, out var accessor))
+                return accessor;
+            return _methodAccessorByType.GetOrAdd(type, t => new MethodsAccessor(t));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static PropertyAccessor GetPropertyAccessor(Type type)
         {
-            PropertyAccessor? accessor = null;
-            if (!_propertyAccessorByType.TryGetValue(type, out accessor))
-            {
-                accessor = new PropertyAccessor(type);
-                _propertyAccessorByType[type] = accessor;
-            }
-
-            return accessor;
+            if (_propertyAccessorByType.TryGetValue(type, out var accessor))
+                return accessor;
+            return _propertyAccessorByType.GetOrAdd(type, t => new PropertyAccessor(t));
         }
 
         internal static PropertyAccessor GetPropertyAccessor<T>()

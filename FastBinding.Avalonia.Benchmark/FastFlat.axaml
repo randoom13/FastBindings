@@ -1,0 +1,6 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AvaloniaBench" xmlns:f="using:FastBindings" x:Class="AvaloniaBench.FastFlat" x:DataType="vm:Vm">
+  <StackPanel>
+    <TextBlock Text="{f:CommonBinding A}" Width="{f:CommonBinding W}" IsVisible="{f:CommonBinding V}" />
+  </StackPanel>
+</UserControl>

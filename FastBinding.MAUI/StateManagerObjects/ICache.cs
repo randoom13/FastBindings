@@ -1,4 +1,5 @@
-﻿using FastBindings.Helpers;
+﻿using System;
+using FastBindings.Helpers;
 using System.ComponentModel;
 
 namespace FastBindings.StateManagerObjects
@@ -11,63 +12,86 @@ namespace FastBindings.StateManagerObjects
         void PrepareCache<T>(ViewModelPropertyInfo<T> finalPropertyInfo, object? sender, PropertyChangedEventArgs args);
     }
 
+    /// <summary>
+    /// CacheStrategy.Simple: one PropertyChanged event can reach several bindings reading the same property of the same object;
+    /// the first reads the value and the others take it, for that event only (the event's args are the session key). One
+    /// instance is shared by every such binding, whatever thread a change arrives on, so each step takes a lock. The object and
+    /// the value are held weakly: a shared static slot must not keep the last view-model alive (a collected one is a miss).
+    /// </summary>
     internal class SourceViewModelCache : ICache
     {
-        private object? _accessor;
+        private readonly WeakReference _accessor = new WeakReference(null);
         private string? _name;
 
-        private object? _value;
+        private readonly WeakReference _value = new WeakReference(null);
         private bool _hasValue = false;
         private object? _sessionKey;
+        private readonly object _gate = new object();
 
         public bool TryGetCache<T>(ViewModelPropertyInfo<T> finalPropertyInfo, out object? result)
         {
-            var hasValue = _hasValue && _sessionKey != null && IsSame(finalPropertyInfo);
-            result = hasValue ? _value : null;
-            return hasValue;
+            lock (_gate)
+            {
+                result = null;
+                if (!_hasValue || _sessionKey == null || !IsSame(finalPropertyInfo))
+                    return false;
+                result = _value.Target;
+                // a null stored is a value; a collected one (Target null although something was stored) is a miss
+                return result != null || _storedNull;
+            }
         }
+
+        private bool _storedNull;
 
         public void ApplyCache<T>(ViewModelPropertyInfo<T> finalPropertyInfo, object? value)
         {
-            if (!_hasValue && _sessionKey != null && IsSame(finalPropertyInfo))
+            lock (_gate)
             {
-                _value = value;
-                _hasValue = true;
+                if (!_hasValue && _sessionKey != null && IsSame(finalPropertyInfo))
+                {
+                    _value.Target = value;
+                    _storedNull = value == null;
+                    _hasValue = true;
+                }
             }
         }
 
         public void Clear()
         {
-            _name = null;
-            _accessor = null;
-            _value = null;
-            _hasValue = false;
-            _sessionKey = null;
+            lock (_gate)
+            {
+                _name = null;
+                _accessor.Target = null;
+                _value.Target = null;
+                _storedNull = false;
+                _hasValue = false;
+                _sessionKey = null;
+            }
         }
 
         private bool IsSame<T>(ViewModelPropertyInfo<T> finalPropertyInfo) =>
-         ReferenceEquals(finalPropertyInfo.Accessor, _accessor)
-               && finalPropertyInfo.Name == _name;
+            finalPropertyInfo != null && finalPropertyInfo.Accessor != null
+            && ReferenceEquals(finalPropertyInfo.Accessor, _accessor.Target) && finalPropertyInfo.Name == _name;
 
         public void PrepareCache<T>(ViewModelPropertyInfo<T> finalPropertyInfo, object? sender, PropertyChangedEventArgs args)
         {
-            if (!ReferenceEquals(sender, finalPropertyInfo.Accessor))
+            lock (_gate)
             {
-                Clear();
-                return;
-            }
+                if (finalPropertyInfo == null || !ReferenceEquals(sender, finalPropertyInfo.Accessor))
+                {
+                    Clear();
+                    return;
+                }
 
-            if (!ReferenceEquals(args, _sessionKey))
-            {
-                Clear();
-                _sessionKey = args;
-            }
-            if (finalPropertyInfo == null || !IsSame(finalPropertyInfo))
-            {
-                Clear();
-                _sessionKey = args;
-                _name = null;
-                _accessor = null;
+                // A new event, or another object or property: the slot starts again for this one. It was reset to null here,
+                // so IsSame never held for a real view-model, ApplyCache never stored and the cache never returned a value.
+                if (!ReferenceEquals(args, _sessionKey) || !IsSame(finalPropertyInfo))
+                {
+                    Clear();
+                    _sessionKey = args;
+                    _accessor.Target = finalPropertyInfo.Accessor;
+                    _name = finalPropertyInfo.Name;
+                }
             }
         }
     }

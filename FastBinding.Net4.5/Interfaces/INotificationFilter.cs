@@ -2,27 +2,27 @@
 
 namespace FastBindings.Interfaces
 {
-    public class NotificationArgs
+    public class NotificationArgs 
     {
-        public object Target { get; private set; }
-        public object Source { get; private set; }
+        public object? Target { get; private set; }
+        public object? Source { get; private set; }
         public bool Handled { get; set; } = false;
         public bool IsUpdating { get; internal set; }
-        public string Name { get; internal set; }
+        public string? Name { get; internal set; }
 
-        private object _value;
+        private object? _value;
 
-        public static NotificationArgs CreateFromSource(object source, object value)
+        public static NotificationArgs CreateFromSource(object? source, object? value) 
         {
             return new NotificationArgs(null, source, value);
         }
 
-        public static NotificationArgs CreateFromTarget(object target, object value)
+        public static NotificationArgs CreateFromTarget(object? target, object? value)
         {
             return new NotificationArgs(target, null, value);
         }
 
-        private NotificationArgs(object target, object source, object value)
+        private NotificationArgs(object? target, object? source, object? value)
         {
             Target = target;
             Source = source;

@@ -1,5 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace FastBindings.Helpers
 {
@@ -8,17 +13,17 @@ namespace FastBindings.Helpers
         public bool HasGetter { get; private set; }
         public bool HasSetter { get; private set; }
         public bool IsValid => _fieldInfo != null;
-        public Type PropertyType { get; private set; }
-        private Func<object, object> _getterFunc;
-        private Action<object, object> _setterFunc;
-        private PropertyInfo _fieldInfo;
+        public Type? PropertyType { get; private set; }
+        private Func<object, object?>? _getterFunc;
+        private Action<object, object?>? _setterFunc;
+        private PropertyInfo? _fieldInfo;
         private string _name = string.Empty;
 
-        public PropertyInfoResult() 
+        internal PropertyInfoResult() 
         {
         }
 
-        public PropertyInfoResult(PropertyInfo fieldInfo)
+        internal PropertyInfoResult(PropertyInfo? fieldInfo)
         {
             PropertyType = fieldInfo?.PropertyType;
             HasGetter = fieldInfo?.GetGetMethod() != null;
@@ -29,7 +34,7 @@ namespace FastBindings.Helpers
             _name = fieldInfo?.Name ?? "None";
         }
 
-        public bool Set(Type targetType, object target, object value)
+        public bool Set(Type targetType, object target, object? value)
         {
             if (!IsValid)
             {
@@ -61,16 +66,17 @@ namespace FastBindings.Helpers
             if (action == null)
             {
                 action = ExpressionTreeHelper.CreateSetter(_fieldInfo, targetType, target);
-                _setterFunc = action;
                 if (action == null)
                     return false;
+                // two threads may compile it at once: one delegate is kept, both work
+                action = Interlocked.CompareExchange(ref _setterFunc, action, null) ?? action;
             }
 
             action(target, value);
             return true;
         }
 
-        public object Get(Type targetType, object target)
+        public object? Get(Type targetType, object target)
         {
             if (!IsValid)
             {
@@ -94,12 +100,13 @@ namespace FastBindings.Helpers
             if (func == null)
             {
                 func = ExpressionTreeHelper.CreateGetter(_fieldInfo, targetType, target);
-                _getterFunc = func;
                 if (func == null)
                 {
                     return null;
                 }
+                func = Interlocked.CompareExchange(ref _getterFunc, func, null) ?? func;
             }
+
             return func(target);
         }
     }
