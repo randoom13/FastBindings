@@ -61,6 +61,9 @@ namespace FastBindings.Helpers
                 name => new PropertyInfoResult(_propertyInfos.Value.FirstOrDefault(it => it.Name == name)));
         }
 
+        /// <summary>The getter and setter of one property of this type, looked up once (a binding keeps it per source type).</summary>
+        internal PropertyInfoResult Find(string propertyName) => GetPropertyInfoResult(propertyName);
+
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public object? GetProperty(object target, string propertyName)
         {

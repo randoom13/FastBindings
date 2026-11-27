@@ -49,6 +49,22 @@ namespace FastBindings.StateManagerObjects
         internal void Initialize(IViewModelTreeHelper<T> tree) 
         {
             _viewModelTree = tree;
+            var names = CommonViewModelTreeHelper.Segments(_propertyNamePath);
+            _singleName = tree is LightViewModelTreeHelper && names.Length == 1 ? names[0] : null;
+        }
+
+        // A path of one name read through LightViewModelTreeHelper: the property's getter is looked up once per source type and
+        // kept here, so a read is one type check and one delegate call. Before, every read built the path's entries again and
+        // looked the getter up by type and then by name (about 0.6 µs per binding started on MAUI, ADR-free measurement in the
+        // fork's README). Other paths and tree helpers read as before.
+        private string? _singleName;
+        private Reader? _reader;
+
+        private sealed class Reader
+        {
+            public Reader(Type type, PropertyInfoResult property) { Type = type; Property = property; }
+            public readonly Type Type;
+            public readonly PropertyInfoResult Property;
         }
 
         public void Listen(object target, Action<object, object, object?> open) => _propertyUpdatedPublisher.Listen(target, open);
@@ -61,6 +77,22 @@ namespace FastBindings.StateManagerObjects
 
         public object? GetSourceProperty(object? dataContext, bool isWrapException)
         {
+            var name = _singleName;
+            if (name != null && dataContext != null)
+            {
+                try
+                {
+                    var type = dataContext.GetType();
+                    var reader = _reader;
+                    if (reader == null || !ReferenceEquals(reader.Type, type))
+                        _reader = reader = new Reader(type, MembersHelper.GetPropertyAccessor(type).Find(name));
+                    return reader.Property.Get(type, dataContext);
+                }
+                catch (Exception ex)
+                {
+                    return ExceptionUtility.Wrap(ex, isWrapException, StateManagerFactory.ErrorMessage);
+                }
+            }
             return ExceptionUtility.Handle(() =>
             _viewModelTree?.GetViewModelProperty(_propertyNamePath, dataContext),
             isWrapException, StateManagerFactory.ErrorMessage);
@@ -212,7 +244,9 @@ namespace FastBindings.StateManagerObjects
                 {
                     return;
                 }
-                _handlerArgs = new SubscriberHandlerArgs(this, subscribers[subscribers.Length - 1]);
+                if (_selfRef == null)
+                    _selfRef = new WeakReference(this);
+                _handlerArgs = new SubscriberHandlerArgs(_selfRef, subscribers[subscribers.Length - 1]);
                 for (var index = 0; index < subscribers.Length; index++)
                 {
                     if (subscribers[index].Accessor is INotifyPropertyChanged source)
@@ -243,13 +277,15 @@ namespace FastBindings.StateManagerObjects
 
         protected class SubscriberHandlerArgs
         {
-            public SubscriberHandlerArgs(SourceViewModelStateManager<T> manager, ViewModelPropertyInfo<T> finalPropertyInfo)
+            // The manager's own weak reference, shared by its subscriptions: a weak reference is a GC handle (~0.2 µs to make), and
+            // the field initializer made a second one that the constructor replaced at once.
+            public SubscriberHandlerArgs(WeakReference managerRef, ViewModelPropertyInfo<T> finalPropertyInfo)
             {
-                _managerRef = new WeakReference(manager);
+                _managerRef = managerRef;
                 FinalPropertyInfo = finalPropertyInfo;
             }
 
-            private readonly WeakReference _managerRef = new WeakReference(null);
+            private readonly WeakReference _managerRef;
             public SourceViewModelStateManager<T>? Manager => _managerRef.Target as SourceViewModelStateManager<T>;
             public ViewModelPropertyInfo<T> FinalPropertyInfo { get; private set; }
         }
@@ -301,6 +337,7 @@ namespace FastBindings.StateManagerObjects
         }
 
         private SubscriberHandlerArgs? _handlerArgs;
+        private WeakReference? _selfRef;
         private object? _dataContext;
         private readonly List<(INotifyPropertyChanged Source, Subscription Subscription)> _subscriptions =
             new List<(INotifyPropertyChanged, Subscription)>();

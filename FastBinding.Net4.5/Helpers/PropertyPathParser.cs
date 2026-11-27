@@ -15,6 +15,7 @@ namespace FastBindings.Helpers
         public const string DependencyObjectCurrent = "this";
         public const string TypeLevelSplitter = "/";
         private const string ExpectedSymbols = "$[]";
+        private static readonly char[] ExpectedSymbolChars = ExpectedSymbols.ToCharArray();
         private const string Pattern = @"\$\[\[(?<source>.+?)\]\.(?<property>.+?)\](\[(?<optional>.+?)\])?";
 
         public string? Source { get; private set; }
@@ -26,7 +27,7 @@ namespace FastBindings.Helpers
 
         public static bool NeedApply(string input)
         {
-            return ExpectedSymbols.Any(sym => input.Contains(sym));
+            return input.IndexOfAny(ExpectedSymbolChars) >= 0;   // no closure or iterator per binding
         }
 
         internal PropertyPathParser(string input)

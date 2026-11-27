@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -11,6 +11,7 @@ if (Environment.GetEnvironmentVariable("MODE") == "push") return Warmup.Push(Env
 if (Environment.GetEnvironmentVariable("MODE") == "warmup") return Warmup.Run(Environment.GetEnvironmentVariable("CASE") ?? "compiled");
 
 var profile = Environment.GetEnvironmentVariable("PROFILE");
+using var allocationSamples = Environment.GetEnvironmentVariable("ALLOCS") == "1" ? new AvaloniaBench.AllocationSamples() : null;
 var cases = new (string Name, bool Dotted, Func<Control> Make)[]
 {
     ("compiled {Binding}", false, () => new CompiledFlat()),
@@ -131,6 +132,7 @@ if (profile != null)
     string P(string phase) => $"{Median(ms[profile][phase].Skip(Steps.UnmarkedRounds)):N2} ms";
     Console.WriteLine($"[avalonia-bench] profiled {profile}: {rounds - Steps.UnmarkedRounds} rounds after {Steps.UnmarkedRounds} unmarked warm-up rounds; " +
                       $"stopwatch medians create {P("create")}  bind {P("bind")}  layout {P("layout")}  push {P("push")}  layout after {P("layout after")}  unbind {P("unbind")}");
+    AllocationSamples.Print();
     foreach (var (step, t) in Steps.Spent)
         Console.WriteLine($"[avalonia-bench] {step,-12} {t.Total / (rounds - Steps.UnmarkedRounds),8:F2} ms per round, of which the runtime was paused for GC {t.Gc / (rounds - Steps.UnmarkedRounds),8:F2} ms");
     return 0;
@@ -164,9 +166,11 @@ namespace AvaloniaBench
             if (!Marked) { work(); return; }
             // how much of each step the runtime was stopped for a garbage collection (PROFILE prints it)
             var pause = GC.GetTotalPauseDuration(); var sw = System.Diagnostics.Stopwatch.StartNew();
+            AllocationSamples.Step = phase;
             try { Marked1(phase, work); }
             finally
             {
+                AllocationSamples.Step = null;
                 Spent.TryGetValue(phase, out var t);
                 Spent[phase] = (t.Total + sw.Elapsed.TotalMilliseconds, t.Gc + (GC.GetTotalPauseDuration() - pause).TotalMilliseconds);
             }
@@ -197,5 +201,50 @@ namespace AvaloniaBench
 
     public sealed class App : Avalonia.Application
     {
+    }
+}
+
+namespace AvaloniaBench
+{
+    /// <summary>
+    /// ALLOCS=1 with PROFILE: the runtime's allocation samples (one per ~100 KB allocated, with the type that crossed it) counted
+    /// per step, to see what a step allocates.
+    /// </summary>
+    public sealed class AllocationSamples : System.Diagnostics.Tracing.EventListener
+    {
+        public static string? Step;
+        public static readonly Dictionary<(string Step, string Type), (long Samples, long Bytes)> Seen = new();
+
+        protected override void OnEventSourceCreated(System.Diagnostics.Tracing.EventSource source)
+        {
+            if (source.Name == "Microsoft-Windows-DotNETRuntime")
+                EnableEvents(source, System.Diagnostics.Tracing.EventLevel.Verbose, (System.Diagnostics.Tracing.EventKeywords)0x1);
+        }
+
+        protected override void OnEventWritten(System.Diagnostics.Tracing.EventWrittenEventArgs e)
+        {
+            var step = Step;
+            if (step == null || e.EventName == null || !e.EventName.StartsWith("GCAllocationTick") || e.Payload == null)
+                return;
+            var type = e.PayloadNames!.IndexOf("TypeName") is var i and >= 0 ? e.Payload[i] as string ?? "?" : "?";
+            var amount = e.PayloadNames.IndexOf("AllocationAmount64") is var j and >= 0 ? Convert.ToInt64(e.Payload[j]) : 0;
+            lock (Seen)
+            {
+                Seen.TryGetValue((step, type), out var t);
+                Seen[(step, type)] = (t.Samples + 1, t.Bytes + amount);
+            }
+        }
+
+        public static void Print()
+        {
+            lock (Seen)
+                foreach (var g in Seen.GroupBy(k => k.Key.Step))
+                {
+                    var total = g.Sum(x => x.Value.Samples);
+                    Console.WriteLine($"[allocs] {g.Key}: {total} samples");
+                    foreach (var x in g.OrderByDescending(x => x.Value.Samples).Take(15))
+                        Console.WriteLine($"[allocs]   {x.Value.Samples * 100.0 / total,5:F1}%  {x.Key.Type}");
+                }
+        }
     }
 }

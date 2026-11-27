@@ -81,13 +81,13 @@ namespace FastBindings
             if (visualElement != null)
             {
                 ApplyTargets(targetObject, targetProperty, anchor);
-                visualElement.Loaded += OnTargetLoaded;
+                ElementStarter.OnLoaded(visualElement, this);
                 // A plain binding (a path from the BindingContext, on the element itself) starts as soon as the element has a
                 // BindingContext, like a compiled binding: in an app Loaded comes only once the platform view is attached, so a
                 // value set then is a second layout pass on a view already measured with the defaults. Not inside ProvideValue:
                 // what it returns is assigned to the property after it, over anything set there.
                 if (anchor == null && ReferenceEquals(visualElement, targetObject) && StartsWithDataContext)
-                    visualElement.BindingContextChanged += OnTargetBindingContext;
+                    ElementStarter.OnBindingContext(visualElement, this);
             }
 
             return targetProperty.DefaultValue;
@@ -98,20 +98,12 @@ namespace FastBindings
 
         private bool _started;
 
-        private void OnTargetBindingContext(object? sender, EventArgs e)
-        {
-            if (sender is VisualElement element && element.BindingContext != null)
-            {
-                element.BindingContextChanged -= OnTargetBindingContext;
-                element.Loaded -= OnTargetLoaded;
-                Start(element);
-            }
-        }
+        /// <summary>The element's first BindingContext (told by <see cref="ElementStarter"/>).</summary>
+        internal void OnTargetBindingContext(VisualElement element) => Start(element);
 
         /// <summary>Starts the binding once, whichever comes first: the BindingContext or Loaded.</summary>
         internal bool TryStart(VisualElement element)
         {
-            element.BindingContextChanged -= OnTargetBindingContext;
             if (_started)
                 return false;
             _started = true;
@@ -126,6 +118,68 @@ namespace FastBindings
         internal abstract void ApplyTargets(BindableObject targetObject, BindableProperty targetProperty, BindableObject? anchorObject);
 
         internal abstract void OnTargetLoaded(object? sender, EventArgs? args);
+    }
+
+    /// <summary>
+    /// One Loaded handler and one BindingContextChanged handler per element, for all of its bindings, each removed once by the
+    /// element's own event. Before, every binding added and later removed its own handlers: adding or removing a Loaded handler
+    /// is not a plain delegate change in MAUI (it wires the element to its window), and removing both cost about 0.65 µs per
+    /// binding started. A binding that started on the BindingContext stays on the Loaded list until Loaded comes and is
+    /// skipped there (<see cref="BaseBinding.TryStart"/>).
+    /// </summary>
+    internal sealed class ElementStarter
+    {
+        private static readonly ConditionalWeakTable<VisualElement, ElementStarter> Starters = new ConditionalWeakTable<VisualElement, ElementStarter>();
+
+        private List<BaseBinding>? _onLoaded;
+        private List<BaseBinding>? _onBindingContext;
+
+        public static void OnLoaded(VisualElement element, BaseBinding binding)
+        {
+            var starter = Starters.GetValue(element, _ => new ElementStarter());
+            if (starter._onLoaded == null)
+            {
+                starter._onLoaded = new List<BaseBinding>(4);
+                element.Loaded += starter.Loaded;
+            }
+            starter._onLoaded.Add(binding);
+        }
+
+        public static void OnBindingContext(VisualElement element, BaseBinding binding)
+        {
+            var starter = Starters.GetValue(element, _ => new ElementStarter());
+            if (starter._onBindingContext == null)
+            {
+                starter._onBindingContext = new List<BaseBinding>(4);
+                element.BindingContextChanged += starter.BindingContextChanged;
+            }
+            starter._onBindingContext.Add(binding);
+        }
+
+        private void Loaded(object? sender, EventArgs e)
+        {
+            var bindings = _onLoaded;
+            if (sender is VisualElement element)
+                element.Loaded -= Loaded;
+            _onLoaded = null;
+            if (bindings == null)
+                return;
+            foreach (var binding in bindings)
+                binding.OnTargetLoaded(sender, e);
+        }
+
+        private void BindingContextChanged(object? sender, EventArgs e)
+        {
+            if (!(sender is VisualElement element) || element.BindingContext == null)
+                return;
+            var bindings = _onBindingContext;
+            element.BindingContextChanged -= BindingContextChanged;
+            _onBindingContext = null;
+            if (bindings == null)
+                return;
+            foreach (var binding in bindings)
+                binding.OnTargetBindingContext(element);
+        }
     }
 
     [ContentProperty(nameof(Sources))]
@@ -234,7 +288,6 @@ namespace FastBindings
             var element = sender as VisualElement;
             if (element != null)
             {
-                element.Loaded -= OnTargetLoaded;
                 if (TryStart(element))
                     _updateManager.Initialize(CacheStrategy);
             }

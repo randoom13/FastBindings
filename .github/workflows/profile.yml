@@ -24,12 +24,25 @@ jobs:
           dotnet build FastBinding.Net4.5.Benchmark -c Release -o out/net45
           dotnet build tools/EtwStacks -c Release -o out/etw
           mkdir -p profiles
-      - name: WPF without a profiler (step times and GC pauses)
+      - name: build the code before the setup fixes (726ec9a)
         shell: bash
         run: |
-          for kind in "no bindings" classic FastBindings; do
-            PROFILE="$kind" ROUNDS=20 WARMUP=10 SHARED=0 LABEL=".NET 8" dotnet out/net5/FastBinding.Net5.Benchmark.dll
-            PROFILE="$kind" ROUNDS=20 WARMUP=10 SHARED=0 LABEL=".NET Framework 4.8" out/net45/FastBinding.Net4.5.Benchmark.exe
+          git fetch -q --depth=50 origin ${{ github.ref }}
+          git checkout 726ec9a -- FastBinding.Net5 FastBinding.Net4.5
+          dotnet build FastBinding.Net5.Benchmark -c Release -o out/net5-before
+          dotnet build FastBinding.Net4.5.Benchmark -c Release -o out/net45-before
+          git checkout HEAD -- FastBinding.Net5 FastBinding.Net4.5
+      - name: WPF without a profiler, before and after (step times and GC pauses)
+        shell: bash
+        run: |
+          for run in 1 2; do
+            for kind in "no bindings" classic FastBindings; do
+              for v in before ""; do
+                n5="out/net5${v:+-$v}"; n45="out/net45${v:+-$v}"
+                PROFILE="$kind" ROUNDS=20 WARMUP=10 SHARED=0 LABEL=".NET 8 ${v:-after} run $run" dotnet $n5/FastBinding.Net5.Benchmark.dll
+                PROFILE="$kind" ROUNDS=20 WARMUP=10 SHARED=0 LABEL=".NET Framework 4.8 ${v:-after} run $run" $n45/FastBinding.Net4.5.Benchmark.exe
+              done
+            done
           done
       - name: WPF .NET 8 (dotnet-trace)
         shell: bash

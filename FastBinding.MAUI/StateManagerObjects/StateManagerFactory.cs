@@ -21,6 +21,12 @@ namespace FastBindings.StateManagerObjects
             }
             var obj = dataContextParams.AnchorObject ?? targetObject;
             var cache = strategy == CacheStrategy.Simple ? _cache : null;
+            if (sources.IndexOf(PropertyPathParser.PropertiesDevider[0]) < 0)
+            {
+                var single = sources.Trim();
+                if (single.Length > 0)
+                    return new[] { ParseOrInvalid(single, obj, dataContextParams, cache, treeHelper) };
+            }
             return sources.Split(new string[] { PropertyPathParser.PropertiesDevider },
                     StringSplitOptions.RemoveEmptyEntries).
                                Select(property =>
@@ -40,6 +46,22 @@ namespace FastBindings.StateManagerObjects
                                }).
                 ToArray();
         }
+        private static ISourceStateManager ParseOrInvalid<T>(string property, BindableObject targetObject, DataContextParams dataContextParams,
+              ICache? cache, IViewModelTreeHelper<T> treeHelper)
+        {
+            try
+            {
+                return Parse<T>(property, targetObject, dataContextParams, cache, treeHelper);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.Write($"[FastBinding] Failed to create source state manager");
+                System.Diagnostics.Debug.Write(ex);
+                System.Diagnostics.Debug.Write(ex.StackTrace);
+                return new InvalidSourceStateManager(ex);
+            }
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static ISourceStateManager Parse<T>(string property, BindableObject targetObject, DataContextParams dataContextParams,
               ICache? cache, IViewModelTreeHelper<T> treeHelper)
