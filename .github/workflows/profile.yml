@@ -1,0 +1,49 @@
+name: profile
+
+# CPU profiles of the WPF benchmarks, split by step and by binding engine (scripts/profile-steps.py): the .NET 8 build
+# (FastBinding.Net5.Benchmark, through dotnet-trace) and the .NET Framework 4.8 build (FastBinding.Net4.5.Benchmark, through
+# ETW: tools/EtwStacks). Each kind is profiled alone: WARMUP unmarked rounds, then ROUNDS marked rounds.
+on:
+  push:
+    paths: [".github/workflows/profile.yml"]
+  workflow_dispatch:
+
+jobs:
+  wpf:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: build
+        shell: bash
+        run: |
+          dotnet tool install -g dotnet-trace
+          dotnet build FastBinding.Net5.Benchmark -c Release -o out/net5
+          dotnet build FastBinding.Net4.5.Benchmark -c Release -o out/net45
+          dotnet build tools/EtwStacks -c Release -o out/etw
+          mkdir -p profiles
+      - name: WPF .NET 8 (dotnet-trace)
+        shell: bash
+        run: |
+          for kind in "no bindings" classic FastBindings; do
+            f="profiles/net5-${kind// /-}"
+            PROFILE="$kind" ROUNDS=20 WARMUP=10 SHARED=0 dotnet-trace collect --show-child-io --format speedscope -o "$f.nettrace" -- dotnet out/net5/FastBinding.Net5.Benchmark.dll
+            python scripts/profile-steps.py "$f.speedscope.json" --platform wpf --rounds 20 --label "WPF .NET 8, $kind"
+          done
+      - name: WPF .NET Framework 4.8 (ETW)
+        shell: bash
+        env:
+          COMPlus_ZapDisable: "1"
+        run: |
+          for kind in "no bindings" classic FastBindings; do
+            f="profiles/net45-${kind// /-}"
+            PROFILE="$kind" ROUNDS=20 WARMUP=10 SHARED=0 out/etw/EtwStacks.exe "$f.speedscope.json" out/net45/FastBinding.Net4.5.Benchmark.exe
+            python scripts/profile-steps.py "$f.speedscope.json" --platform wpf --rounds 20 --label "WPF .NET Framework 4.8, $kind"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wpf-profiles
+          path: profiles/*.speedscope.json

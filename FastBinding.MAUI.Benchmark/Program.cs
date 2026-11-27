@@ -29,6 +29,7 @@ namespace MauiBench
         public static void Main()
         {
             var only = Environment.GetEnvironmentVariable("ONLY");
+            var profile = Environment.GetEnvironmentVariable("PROFILE");
             var kinds = new (string Name, Func<ContentView> Make)[]
             {
                 ("classic {Binding}", () => new Classic()),
@@ -43,6 +44,26 @@ namespace MauiBench
                 return;
             }
             Console.WriteLine($"[maui-bench] {Environment.GetEnvironmentVariable("LABEL")} views={Views} bindings/view=30 rounds={Rounds}");
+            if (profile != null)
+            {
+                // PROFILE=<part of a kind's name>: that kind only, WARMUP then ROUNDS rounds, for a CPU profile of the process
+                // (scripts/profile-steps.py splits it by the Step_ methods each step runs in)
+                var (pname, pmake) = kinds.Single(k => k.Name.Contains(profile));
+                var warmup = int.Parse(Environment.GetEnvironmentVariable("WARMUP") ?? "10");
+                Marked = false;
+                for (var w = 0; w < warmup; w++) Run(pname, pmake, cold: false);
+                Marked = true;
+                var measured = Enumerable.Range(0, Rounds).Select(_ => Run(pname, pmake, cold: false)).ToList();
+                Console.WriteLine($"[maui-bench] profiled {pname}: {Rounds} rounds after {warmup} unmarked warm-up rounds; stopwatch medians " +
+                                  $"build {Med(measured.Select(m => m.Build).ToList()):F2} ms  bind {Med(measured.Select(m => m.Bind).ToList()):F2} ms  " +
+                                  $"attach {Med(measured.Select(m => m.Attach).ToList()):F2} ms  push {Med(measured.Select(m => m.Push).ToList()) * 1000:F3} µs/binding  " +
+                                  $"detach {Med(measured.Select(m => m.Detach).ToList()):F2} ms");
+                string Spread(Func<(double Build, double Bind, double Attach, double Push, double Detach), double> f) =>
+                    $"mean {measured.Average(f):F2} max {measured.Max(f):F2}";
+                Console.WriteLine($"[maui-bench] spread: build {Spread(m => m.Build)}  bind {Spread(m => m.Bind)}  attach {Spread(m => m.Attach)}  detach {Spread(m => m.Detach)}  " +
+                                  $"GC collections gen0 {GC.CollectionCount(0)} gen1 {GC.CollectionCount(1)} gen2 {GC.CollectionCount(2)}");
+                return;
+            }
             foreach (var (name, make) in kinds)
             {
                 if (only != null && !name.Contains(only)) continue;
@@ -59,6 +80,16 @@ namespace MauiBench
             }
         }
 
+        // Each step runs inside a method of its own name, so a CPU profile tells the steps apart (and never inlined away).
+        // Steps run in their Step_ method only while Marked (PROFILE turns it off for the warm-up rounds, so they leave no marks).
+        static bool Marked = true;
+        static void In(Action<Action> step, Action a) { if (Marked) step(a); else a(); }
+        [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Build(Action a) => a();
+        [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Bind(Action a) => a();
+        [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Attach(Action a) => a();
+        [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Push(Action a) => a();
+        [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Detach(Action a) => a();
+
         static double _cold;
         static double Med(List<double> v) { v.Sort(); return v[v.Count / 2]; }
 
@@ -68,17 +99,20 @@ namespace MauiBench
             var vm = new Vm();
             var sw = Stopwatch.StartNew();
             var views = new ContentView[Views];
-            for (var i = 0; i < Views; i++) views[i] = make();
+            In(Step_Build, () => { for (var i = 0; i < Views; i++) views[i] = make(); });
             var build = sw.Elapsed.TotalMilliseconds;
             sw.Restart();
-            foreach (var v in views) v.BindingContext = vm;
-            dispatcher.RunJobs();
+            In(Step_Bind, () => { foreach (var v in views) v.BindingContext = vm; dispatcher.RunJobs(); });
             var bind = sw.Elapsed.TotalMilliseconds;
             sw.Restart();
             var panel = new VerticalStackLayout();
-            var window = new Window(new ContentPage { Content = panel });
-            foreach (var v in views) panel.Children.Add(v);
-            dispatcher.RunJobs();
+            Window window = null!;
+            In(Step_Attach, () =>
+            {
+                window = new Window(new ContentPage { Content = panel });
+                foreach (var v in views) panel.Children.Add(v);
+                dispatcher.RunJobs();
+            });
             var attach = sw.Elapsed.TotalMilliseconds;
             // every view must show the view-model's values, whichever way it got them
             var label = (Label)((VerticalStackLayout)views[^1].Content).Children[0];
@@ -86,14 +120,11 @@ namespace MauiBench
             if (cold) _cold = build + bind + attach;
             const int changes = 20;
             sw.Restart();
-            for (var c = 0; c < changes; c++) { vm.S0 = "v" + c; vm.D0 = c; }
-            dispatcher.RunJobs();
+            In(Step_Push, () => { for (var c = 0; c < changes; c++) { vm.S0 = "v" + c; vm.D0 = c; } dispatcher.RunJobs(); });
             var push = sw.Elapsed.TotalMilliseconds / (changes * 2.0 * Views);   // per binding told of a change
             if (label.Text != "v19") throw new Exception($"{name}: push not applied ({label.Text})");
             sw.Restart();
-            window.Page = null;
-            foreach (var v in views) v.BindingContext = null;
-            dispatcher.RunJobs();
+            In(Step_Detach, () => { window.Page = null; foreach (var v in views) v.BindingContext = null; dispatcher.RunJobs(); });
             var detach = sw.Elapsed.TotalMilliseconds;
             return (build, bind, attach, push, detach);
         }

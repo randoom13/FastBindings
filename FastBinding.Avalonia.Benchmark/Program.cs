@@ -10,6 +10,7 @@ if (Environment.GetEnvironmentVariable("MODE") == "checks") return Checks.Run();
 if (Environment.GetEnvironmentVariable("MODE") == "push") return Warmup.Push(Environment.GetEnvironmentVariable("CASE") ?? "compiled");
 if (Environment.GetEnvironmentVariable("MODE") == "warmup") return Warmup.Run(Environment.GetEnvironmentVariable("CASE") ?? "compiled");
 
+var profile = Environment.GetEnvironmentVariable("PROFILE");
 var cases = new (string Name, bool Dotted, Func<Control> Make)[]
 {
     ("compiled {Binding}", false, () => new CompiledFlat()),
@@ -27,6 +28,7 @@ static string Show(TextBlock t) => $"{t.Text}/{t.Width}/{t.IsVisible}";
 var failures = 0;
 foreach (var (name, dotted, make) in cases)
 {
+    if (profile != null) break;
     var vm = new Vm();
     var control = make();
     var window = new Window { Content = control };
@@ -73,9 +75,20 @@ string[] phases = ["create", "bind", "layout", "push", "layout after", "unbind"]
 var ms = cases.ToDictionary(c => c.Name, _ => phases.ToDictionary(p => p, _ => new List<double>()));
 var kb = cases.ToDictionary(c => c.Name, _ => phases.ToDictionary(p => p, _ => new List<double>()));
 var texts = Enumerable.Range(0, 10).Select(k => "x" + k).ToArray();
+// PROFILE=<a case's name>: that case only, WARMUP unmarked rounds then ROUNDS marked ones, for a CPU profile of the process
+// (scripts/profile-steps.py splits it by the Step_ methods each phase runs in).
+var profiled = profile == null ? cases : cases.Where(c => c.Name == profile).ToArray();
+if (profile != null)
+{
+    if (profiled.Length != 1) { Console.WriteLine($"PROFILE: no case named '{profile}'"); return 2; }
+    var warmup = int.TryParse(Environment.GetEnvironmentVariable("WARMUP"), out var wu) ? wu : 5;
+    rounds += warmup;
+    Steps.UnmarkedRounds = warmup;
+}
 for (var round = 0; round < rounds; round++)
 {
-    foreach (var (name, dotted, make) in cases)
+    Steps.Marked = round >= Steps.UnmarkedRounds;
+    foreach (var (name, dotted, make) in profiled)
     {
         var panel = new StackPanel();
         var window = new Window { Content = panel };
@@ -89,7 +102,7 @@ for (var round = 0; round < rounds; round++)
         {
             var bytes = GC.GetAllocatedBytesForCurrentThread();
             var start = Stopwatch.GetTimestamp();
-            work();
+            Steps.Run(phase, work);
             ms[name][phase].Add(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
             kb[name][phase].Add((GC.GetAllocatedBytesForCurrentThread() - bytes) / 1024.0);
         }
@@ -113,6 +126,14 @@ for (var round = 0; round < rounds; round++)
     }
 }
 
+if (profile != null)
+{
+    string P(string phase) => $"{Median(ms[profile][phase].Skip(Steps.UnmarkedRounds)):N2} ms";
+    Console.WriteLine($"[avalonia-bench] profiled {profile}: {rounds - Steps.UnmarkedRounds} rounds after {Steps.UnmarkedRounds} unmarked warm-up rounds; " +
+                      $"stopwatch medians create {P("create")}  bind {P("bind")}  layout {P("layout")}  push {P("push")}  layout after {P("layout after")}  unbind {P("unbind")}");
+    return 0;
+}
+
 static double Median(IEnumerable<double> values) { var s = values.Order().ToArray(); return s[s.Length / 2]; }
 Console.WriteLine();
 Console.WriteLine($"{n} views × 3 bindings = {3 * n} bindings, {20 * n} pushes; median of rounds 2–{rounds} (round 1 = cold)");
@@ -130,6 +151,35 @@ return failures;
 
 namespace AvaloniaBench
 {
+    /// <summary>Each phase runs inside a method of its own name, so a CPU profile tells the phases apart (never inlined away).</summary>
+    public static class Steps
+    {
+        public static bool Marked = true;
+        public static int UnmarkedRounds;
+
+        public static void Run(string phase, Action work)
+        {
+            if (!Marked) { work(); return; }
+            switch (phase)
+            {
+                case "create": Step_Create(work); break;
+                case "bind": Step_Bind(work); break;
+                case "layout": Step_Layout(work); break;
+                case "push": Step_Push(work); break;
+                case "layout after": Step_LayoutAfter(work); break;
+                case "unbind": Step_Unbind(work); break;
+                default: work(); break;
+            }
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] static void Step_Create(Action a) => a();
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] static void Step_Bind(Action a) => a();
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] static void Step_Layout(Action a) => a();
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] static void Step_Push(Action a) => a();
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] static void Step_LayoutAfter(Action a) => a();
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] static void Step_Unbind(Action a) => a();
+    }
+
     public sealed class App : Avalonia.Application
     {
     }

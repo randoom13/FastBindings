@@ -67,6 +67,9 @@ namespace WpfBench
             // Every kind first warmed up (WARMUP rounds), then the kinds measured in turn, round by round: each sees the same JIT
             // tiers and machine state. Measured one kind after another, the kind run first ran on WPF code the JIT had not
             // optimised yet (the baseline came out slower than the bindings).
+            var profile = Environment.GetEnvironmentVariable("PROFILE");
+            if (profile != null)
+                return Profile(kinds.Single(k => k.Name.Contains(profile)));
             var selected = kinds.Where(k => only == null || k.Name.Contains(only) || k.Plain).ToArray();
             var warmup = int.Parse(Environment.GetEnvironmentVariable("WARMUP") ?? "10");
             var cold = selected.ToDictionary(k => k.Name, k => Run(k.Name, k.Make, k.Plain));
@@ -86,8 +89,8 @@ namespace WpfBench
                                   $"(cold first round: values {cold[name].Values:F1} ms)");
             }
             if (results.TryGetValue("no bindings (baseline)", out var baseline))
-                foreach (var (name, steps) in results)
-                    if (!name.StartsWith("no bindings"))
+                foreach (var entry in results)
+                    if (entry.Key is var name && entry.Value is var steps && !name.StartsWith("no bindings"))
                         Console.WriteLine($"[wpf-bench] {name,-28} minus no bindings: build {steps.Build - baseline.Build,7:F2} ms  bind {steps.Bind - baseline.Bind,7:F2} ms  " +
                                           $"attach {steps.Attach - baseline.Attach,7:F2} ms  values {steps.Values - baseline.Values,7:F2} ms  " +
                                           $"push {(steps.Push - baseline.Push) * 1000,6:F3} µs per binding updated  detach {steps.Detach - baseline.Detach,7:F2} ms");
@@ -95,6 +98,33 @@ namespace WpfBench
                 Diagnose();
             return 0;
         }
+
+        /// <summary>
+        /// PROFILE=&lt;part of a kind's name&gt;: that kind only, WARMUP rounds then ROUNDS rounds, for a CPU profile taken around the
+        /// process (scripts/profile-steps.py splits it by the Step_ methods each step runs in).
+        /// </summary>
+        static int Profile((string Name, Func<UserControl> Make, bool Plain) kind)
+        {
+            var warmup = int.Parse(Environment.GetEnvironmentVariable("WARMUP") ?? "10");
+            Marked = false;
+            for (var w = 0; w < warmup; w++) Run(kind.Name, kind.Make, kind.Plain);
+            Marked = true;
+            var m = Enumerable.Range(0, Rounds).Select(_ => Run(kind.Name, kind.Make, kind.Plain)).ToList();
+            Console.WriteLine($"[wpf-bench] profiled {kind.Name}: {Rounds} rounds after {warmup} unmarked warm-up rounds; stopwatch medians " +
+                              $"build {Med(m, x => x.Build):F2} ms  bind {Med(m, x => x.Bind):F2} ms  attach {Med(m, x => x.Attach):F2} ms  " +
+                              $"push {Med(m, x => x.Push) * 1000:F3} µs per binding updated  detach {Med(m, x => x.Detach):F2} ms");
+            return 0;
+        }
+
+        // Each step runs inside a method of its own name, so a CPU profile tells the steps apart (and never inlined away).
+        // Steps run in their Step_ method only while Marked (PROFILE turns it off for the warm-up rounds, so they leave no marks).
+        static bool Marked = true;
+        static void In(Action<Action> step, Action a) { if (Marked) step(a); else a(); }
+        [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Build(Action a) => a();
+        [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Bind(Action a) => a();
+        [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Attach(Action a) => a();
+        [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Push(Action a) => a();
+        [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Detach(Action a) => a();
 
         static double Med(List<Steps> m, Func<Steps, double> f) { var v = m.Select(f).OrderBy(x => x).ToList(); return v[v.Count / 2]; }
 
@@ -159,30 +189,39 @@ namespace WpfBench
             var before = reading?.Invoke() ?? 0;
             var sw = Stopwatch.StartNew();
             var views = new UserControl[Views];
-            for (var i = 0; i < Views; i++) views[i] = make();
+            In(Step_Build, () => { for (var i = 0; i < Views; i++) views[i] = make(); });
             var build = sw.Elapsed.TotalMilliseconds;
             step?.Invoke(0, before); before = reading?.Invoke() ?? 0;
             sw.Restart();
-            for (var i = 0; i < Views; i++)
+            In(Step_Bind, () =>
             {
-                var vm = vms[Shared ? 0 : i];
-                if (plain) Fill(views[i], vm);
-                else views[i].DataContext = vm;
-            }
-            Settle();
+                for (var i = 0; i < Views; i++)
+                {
+                    var vm = vms[Shared ? 0 : i];
+                    if (plain) Fill(views[i], vm);
+                    else views[i].DataContext = vm;
+                }
+                Settle();
+            });
             var bind = sw.Elapsed.TotalMilliseconds;
             step?.Invoke(1, before); before = reading?.Invoke() ?? 0;
             sw.Restart();
             var panel = new StackPanel();
-            foreach (var v in views) panel.Children.Add(v);
-            var window = new Window { Content = new ScrollViewer { Content = panel }, Width = 400, Height = 400, ShowActivated = false, ShowInTaskbar = false };
-            window.Show();
-            Settle();
+            Window window = null!;
+            In(Step_Attach, () =>
+            {
+                foreach (var v in views) panel.Children.Add(v);
+                window = new Window { Content = new ScrollViewer { Content = panel }, Width = 400, Height = 400, ShowActivated = false, ShowInTaskbar = false };
+                window.Show();
+                Settle();
+            });
             var attach = sw.Elapsed.TotalMilliseconds;
             step?.Invoke(2, before); before = reading?.Invoke() ?? 0;
-            var label = Block(views[^1], 0);
-            if (label.Text != "s0" || Block(views[^1], 1).Width != 11) throw new Exception($"{name}: wrong values ({label.Text})");
+            var label = Block(views[views.Length - 1], 0);
+            if (label.Text != "s0" || Block(views[views.Length - 1], 1).Width != 11) throw new Exception($"{name}: wrong values ({label.Text})");
             sw.Restart();
+            In(Step_Push, () =>
+            {
             for (var c = 0; c < Changes; c++)
             {
                 var text = "v" + c;
@@ -195,13 +234,17 @@ namespace WpfBench
                     }
             }
             Settle();
+            });
             var push = sw.Elapsed.TotalMilliseconds / (Changes * BindingsPerChange * Views);
             step?.Invoke(3, before); before = reading?.Invoke() ?? 0;
             if (label.Text != "v19") throw new Exception($"{name}: push not applied ({label.Text})");
             sw.Restart();
-            window.Close();
-            foreach (var v in views) v.DataContext = null;
-            Settle();
+            In(Step_Detach, () =>
+            {
+                window.Close();
+                foreach (var v in views) v.DataContext = null;
+                Settle();
+            });
             var detach = sw.Elapsed.TotalMilliseconds;
             step?.Invoke(4, before);
             return new Steps(build, bind, attach, push, detach);
