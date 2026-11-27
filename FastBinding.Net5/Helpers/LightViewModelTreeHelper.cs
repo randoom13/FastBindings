@@ -16,6 +16,9 @@ namespace FastBindings.Helpers
             if (item == null)
                 return null;
 
+            if (item.Accessor == null)   // a null object on the path: no value, as a platform binding has none
+                return null;
+
             var info = MembersHelper.GetPropertyAccessor(item.Accessor.GetType());
             return info.GetProperty(item.Accessor, item.Name);
         }
@@ -69,6 +72,8 @@ namespace FastBindings.Helpers
             {
                 return null;
             }
+            if (item.Accessor == null)   // a null object on the path: no value, as a platform binding has none
+                return null;
             var info = MembersHelper.GetPropertyAccessor(item.Accessor.GetType());
             return info.GetProperty(item.Accessor, item.Name);
         }
@@ -80,7 +85,7 @@ namespace FastBindings.Helpers
                 return;
 
             var item = GetPropertyInfos(propertyAccessor, propertyName).LastOrDefault();
-            if (item != null)
+            if (item?.Accessor != null)   // a null object on the path: nothing to write into
             {
                 if (!CommonViewModelTreeHelper.SetViewModelProperty(item.Name, item.Accessor, value))
                 {
@@ -94,6 +99,9 @@ namespace FastBindings.Helpers
         {
             var item = GetPropertyInfos(dataContext, propertyName).LastOrDefault();
             if (item == null)
+                return null;
+
+            if (item.Accessor == null)   // a null object on the path: no value, as a platform binding has none
                 return null;
 
             var info = MembersHelper.GetPropertyAccessor(item.Accessor.GetType());

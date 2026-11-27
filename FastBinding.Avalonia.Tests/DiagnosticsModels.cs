@@ -63,3 +63,24 @@ namespace FastBindings.Tests
         }
     }
 }
+
+namespace FastBindings.Tests
+{
+    public sealed class QuietLeaf : Observable
+    {
+        private string? _name;
+        private bool _shown;
+        private double _shade = 1;
+        public string? Name { get => _name; set => Set(ref _name, value); }
+        public bool Shown { get => _shown; set => Set(ref _shown, value); }
+        public double Shade { get => _shade; set => Set(ref _shade, value); }
+    }
+
+    /// <summary>For the <see cref="Views.Quiet"/> view: nothing about it is a problem with a binding.</summary>
+    public sealed class QuietModel : Observable
+    {
+        private QuietLeaf? _child;
+        public QuietLeaf? Child { get => _child; set => Set(ref _child, value); }
+        public QuietLeaf Other { get; } = new QuietLeaf { Name = "other" };
+    }
+}

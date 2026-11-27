@@ -19,4 +19,5 @@ namespace FastBindings.Tests.Views
     public partial class SwapCombo : UserControl { public SwapCombo() => AvaloniaXamlLoader.Load(this); }
 
     public partial class Faults : UserControl { public Faults() => AvaloniaXamlLoader.Load(this); }
+    public partial class Quiet : UserControl { public Quiet() => AvaloniaXamlLoader.Load(this); }
 }

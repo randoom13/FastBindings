@@ -69,6 +69,9 @@ namespace FastBindings.Helpers
             if (item == null)
                 return null;
 
+            if (item.Accessor == null)   // a null object on the path: no value, as a platform binding has none
+                return null;
+
             var info = MembersHelper.GetPropertyAccessor(item.Accessor.GetType());
             return info.GetPropertyGetterType(item.Name);
         }

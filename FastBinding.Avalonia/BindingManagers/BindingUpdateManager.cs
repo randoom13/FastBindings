@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using FastBindings.Diagnostics;
@@ -204,7 +204,7 @@ namespace FastBindings.BindingManagers
                 }
             }
             value = CalculateValue(value);
-            if (CanUpdateTarget(targetProperty, value))
+            if (CanUpdateTarget(targetProperty, ref value))
                 UpdateTarget(initialTarget, targetProperty, value);
         }
 
@@ -350,7 +350,7 @@ namespace FastBindings.BindingManagers
             }
 
             value = CalculateValue(value);
-            if (!CanUpdateTarget(property, value))
+            if (!CanUpdateTarget(property, ref value))
             {
                 return;
             }
@@ -453,7 +453,7 @@ namespace FastBindings.BindingManagers
                 }
             }
             value = CalculateValue(value);
-            if (CanUpdateTarget(property, value))
+            if (CanUpdateTarget(property, ref value))
             {
                 var ars = NotificationArgs.CreateFromTarget(sender, value);
                 try
@@ -490,7 +490,7 @@ namespace FastBindings.BindingManagers
         private Type? _validValueType;
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private bool CanUpdateTarget(AvaloniaProperty property, object? value)
+        private bool CanUpdateTarget(AvaloniaProperty property, ref object? value)
         {
             if (!CanUpdateTarget(value))
                 return false;
@@ -498,6 +498,13 @@ namespace FastBindings.BindingManagers
                 return true;
             if (!ReflectionUtility.IsValidType(value, property.PropertyType))
             {
+                if (value == null)
+                {
+                    // no value for a property that cannot hold null (a null on the path, a DataContext going away): the property goes
+                    // back to its default, as an Avalonia binding's does — nothing wrong with the binding, nothing reported
+                    value = AvaloniaProperty.UnsetValue;
+                    return true;
+                }
                 if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ValueNotAssignable, detail: $"{property.Name} is {property.PropertyType.Name}, the value is {value?.GetType().Name}",
                     target: _targetObjectRef.Target, value: value, binding: Description);
                 return false;
