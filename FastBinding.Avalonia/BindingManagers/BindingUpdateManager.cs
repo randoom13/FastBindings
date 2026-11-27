@@ -363,22 +363,27 @@ namespace FastBindings.BindingManagers
         }
 
 
-        // While a DataContext change goes through, the target's own changes are not written back. Avalonia's selecting controls
-        // defer their selection while the DataContext updates and, when it ends, clear it and then set the new view-model's
-        // value (OnDataContextEndUpdate): both reached the source as writes, so a view moved to another view-model wrote null
-        // and then its own value into it (a report's grouping rebuilt the report). The change ends with the dispatcher's turn:
-        // one flag for the UI thread and one posted reset per turn, not one per binding (a view of thousands of bindings changes
-        // DataContext at once).
-        [ThreadStatic] private static bool s_contextChanging;
-        [ThreadStatic] private static Action? s_endContextChange;
+        // While its target's DataContext change goes through, a binding writes nothing back. Avalonia's selecting controls defer
+        // their selection while the DataContext updates and, when it ends, clear it and then set the new view-model's value
+        // (OnDataContextEndUpdate): both reached the source as writes, so a view moved to another view-model wrote null and then
+        // its own value into it (a report's grouping rebuilt the report). The change ends with the dispatcher's turn, counted by
+        // one number for the UI thread and one posted step per turn, not one per binding (a view of thousands of bindings
+        // changes DataContext at once). Only the bindings whose DataContext changed in this turn are held back: one flag for the
+        // whole thread also dropped what was typed into a box beside a list whose items changed (at a few frames a second the
+        // turn's end came after the next key).
+        [ThreadStatic] private static int s_turn;
+        [ThreadStatic] private static bool s_turnEndPosted;
+        [ThreadStatic] private static Action? s_endTurn;
+        private int _contextTurn = -1;
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnDataContextChanged(object? sender, EventArgs e)
         {
-            if (!s_contextChanging)
+            _contextTurn = s_turn;
+            if (!s_turnEndPosted)
             {
-                s_contextChanging = true;
-                Dispatcher.UIThread.Post(s_endContextChange ??= () => s_contextChanging = false, DispatcherPriority.Background);
+                s_turnEndPosted = true;
+                Dispatcher.UIThread.Post(s_endTurn ??= () => { s_turn++; s_turnEndPosted = false; }, DispatcherPriority.Background);
             }
             FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._dataContextChanges);
             var target = _targetObjectRef?.Target as AvaloniaObject;
@@ -520,7 +525,7 @@ namespace FastBindings.BindingManagers
 
         private void OnDependencyPropertyChanged(object? newValue)
         {
-            if (_updatingTarget || _initializing || s_contextChanging)
+            if (_updatingTarget || _initializing || _contextTurn == s_turn)
             {
                 return;
             }

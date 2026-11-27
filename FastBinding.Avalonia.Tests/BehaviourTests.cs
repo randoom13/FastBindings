@@ -178,6 +178,22 @@ namespace FastBindings.Tests
             Assert.True(first.Changes.Count == 0 && second.Changes.Count == 0, $"first: {string.Join(",", first.Changes)}; second: {string.Join(",", second.Changes)}");
         }
 
+        /// <summary>
+        /// Another view's DataContext changing in the same dispatcher turn holds back nothing of this one: a key typed while a
+        /// list of suggestions beside it got new items reached the view-model (EngineeringStudio's filter lost the last key
+        /// typed at a few frames a second).
+        /// </summary>
+        [AvaloniaFact]
+        public void Another_view_changing_its_DataContext_holds_back_no_typing()
+        {
+            var vm = new Vm { A = "start" };
+            using var text = Ui.Show(new TwoWayText(), vm);
+            using var other = Ui.Show(new SwapCombo(), new Picker { Name = "first", Items = new[] { "a" }, Selected = "a" });
+            other.View.DataContext = new Picker { Name = "second", Items = new[] { "x" }, Selected = "x" };
+            text.Find<TextBox>("Box").Text = "typed";
+            Assert.Equal("typed", vm.A);
+        }
+
         /// <summary>A view-model that lives on does not keep a view it was shown in alive.</summary>
         [AvaloniaFact]
         public void A_closed_view_is_collected_while_its_view_model_lives()
