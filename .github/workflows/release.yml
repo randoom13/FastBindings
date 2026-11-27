@@ -40,8 +40,14 @@ jobs:
         with:
           fetch-depth: 0   # the tags
       - uses: actions/setup-dotnet@v4
+        id: dotnet
         with:
           dotnet-version: 8.0.x
+      - name: build with the .NET 8 SDK
+        # The runner's default SDK is newer and refuses FastBindings.MAUI's net8.0-android/-ios/-maccatalyst targets
+        # (NETSDK1202: MAUI 8 is out of support); the SDK they were made for still builds them.
+        shell: bash
+        run: dotnet new globaljson --sdk-version "${{ steps.dotnet.outputs.dotnet-version }}" --force && dotnet --version
       - name: next version
         id: version
         shell: bash
