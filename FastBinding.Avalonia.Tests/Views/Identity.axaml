@@ -12,6 +12,18 @@
     <!-- a binding of DataContext reads the parent's DataContext -->
     <StackPanel x:Name="Inner" DataContext="{f:CommonBinding Child}">
       <TextBlock x:Name="Text" Text="{f:CommonBinding A}" />
+      <!-- an ancestor named by a type it derives from, as Avalonia's $parent[UserControl] finds this view -->
+      <TextBlock x:Name="ByBase" Text="{f:CommonBinding Maybe, DataContextSource=UserControl/1}" />
     </StackPanel>
+    <!-- the same at a data template's root, where the DataContext comes from the presenter -->
+    <ContentControl x:Name="Host" Content="{f:CommonBinding .}">
+      <ContentControl.ContentTemplate>
+        <DataTemplate>
+          <Border DataContext="{f:CommonBinding Child}">
+            <TextBlock Text="{f:CommonBinding A}" />
+          </Border>
+        </DataTemplate>
+      </ContentControl.ContentTemplate>
+    </ContentControl>
   </StackPanel>
 </UserControl>

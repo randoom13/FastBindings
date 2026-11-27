@@ -16,4 +16,5 @@ namespace FastBindings.Tests.Views
     public partial class NullValue : UserControl { public NullValue() => AvaloniaXamlLoader.Load(this); }
     public partial class Accessor : UserControl { public Accessor() => AvaloniaXamlLoader.Load(this); }
     public partial class Identity : UserControl { public Identity() => AvaloniaXamlLoader.Load(this); }
+    public partial class SwapCombo : UserControl { public SwapCombo() => AvaloniaXamlLoader.Load(this); }
 }

@@ -58,7 +58,9 @@ namespace FastBindings
                     // DataContext, like a compiled binding: a view whose DataContext is set before it joins the window gets its
                     // values while nothing is attached yet, when a change invalidates nothing. Not inside ProvideValue: what it
                     // returns is assigned to the property after it, over anything set there.
-                    if (anchorObj == null && StartsWithDataContext)
+                    // Not a binding of DataContext itself: it reads its parent's, which a data template's root has only once it
+                    // joins the tree (started earlier, it read the DataContext it was about to set).
+                    if (anchorObj == null && StartsWithDataContext && targetProperty != StyledElement.DataContextProperty)
                         ElementStarter.OnDataContext(visualElement, this);
                 }
             }

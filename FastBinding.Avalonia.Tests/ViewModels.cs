@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -91,5 +91,24 @@ namespace FastBindings.Tests
         public string A { get => _a; set => Set(ref _a, value); }
         public object? GetProperty(string propertyName) => propertyName == nameof(A) ? _a : null;
         public void SetProperty(string propertyName, object? value) { if (propertyName == nameof(A)) A = (string)value!; }
+    }
+
+    public sealed class Picker : Observable
+    {
+        private IReadOnlyList<string> _items = System.Array.Empty<string>();
+        private string? _selected;
+        public string Name { get; set; } = "";
+        public IReadOnlyList<string> Items { get => _items; set => Set(ref _items, value); }
+        public string? Selected
+        {
+            get => _selected;
+            set
+            {
+                if (_selected != value)
+                    Changes.Add(value);
+                Set(ref _selected, value);
+            }
+        }
+        public System.Collections.Generic.List<string?> Changes { get; } = new();
     }
 }

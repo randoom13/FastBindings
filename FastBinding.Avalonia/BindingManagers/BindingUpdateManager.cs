@@ -363,9 +363,23 @@ namespace FastBindings.BindingManagers
         }
 
 
+        // While a DataContext change goes through, the target's own changes are not written back. Avalonia's selecting controls
+        // defer their selection while the DataContext updates and, when it ends, clear it and then set the new view-model's
+        // value (OnDataContextEndUpdate): both reached the source as writes, so a view moved to another view-model wrote null
+        // and then its own value into it (a report's grouping rebuilt the report). The change ends with the dispatcher's turn:
+        // one flag for the UI thread and one posted reset per turn, not one per binding (a view of thousands of bindings changes
+        // DataContext at once).
+        [ThreadStatic] private static bool s_contextChanging;
+        [ThreadStatic] private static Action? s_endContextChange;
+
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnDataContextChanged(object? sender, EventArgs e)
         {
+            if (!s_contextChanging)
+            {
+                s_contextChanging = true;
+                Dispatcher.UIThread.Post(s_endContextChange ??= () => s_contextChanging = false, DispatcherPriority.Background);
+            }
             FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._dataContextChanges);
             var target = _targetObjectRef?.Target as AvaloniaObject;
             var property = _targetPropertyRef?.Target as AvaloniaProperty;
@@ -506,7 +520,7 @@ namespace FastBindings.BindingManagers
 
         private void OnDependencyPropertyChanged(object? newValue)
         {
-            if (_updatingTarget || _initializing)
+            if (_updatingTarget || _initializing || s_contextChanging)
             {
                 return;
             }

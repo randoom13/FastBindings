@@ -49,6 +49,18 @@ namespace FastBindings.Helpers
             return item;
         }
 
+        /// <summary>
+        /// The type, or one it derives from, has this name: an ancestor is found as Avalonia's $parent[T] finds it (a view
+        /// derived from UserControl is a UserControl), not only by its own type's name.
+        /// </summary>
+        private static bool IsOrDerives(Type? type, string typeName)
+        {
+            for (; type != null; type = type.BaseType)
+                if (type.Name == typeName)
+                    return true;
+            return false;
+        }
+
         public static AvaloniaObject? GetParent(AvaloniaObject obj, int level, string typeName)
         {
             var item = obj;
@@ -56,7 +68,7 @@ namespace FastBindings.Helpers
             while (lev > 0 && item != null)
             {
                 item = (item as Control)?.GetVisualParent() as AvaloniaObject;
-                if (item?.GetType()?.Name == typeName)
+                if (IsOrDerives(item?.GetType(), typeName))
                 {
                     lev--;
                 }
@@ -70,7 +82,7 @@ namespace FastBindings.Helpers
             while (lev > 0 && item != null)
             {
                 item = (item as ILogical)?.LogicalParent as AvaloniaObject;
-                if (item?.GetType()?.Name == typeName)
+                if (IsOrDerives(item?.GetType(), typeName))
                 {
                     lev--;
                 }

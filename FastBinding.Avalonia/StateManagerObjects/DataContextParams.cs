@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using Avalonia.VisualTree;
 using FastBindings.Helpers;
 using System;
 
@@ -26,8 +27,15 @@ namespace FastBindings.StateManagerObjects
             if (string.IsNullOrEmpty(DataContextSource))
             {
                 var element = AnchorObject ?? target;
-                if (FromParent && element is StyledElement styled && styled.Parent is AvaloniaObject parent)
-                    return parent;
+                if (FromParent && element is StyledElement styled)
+                {
+                    // the visual parent, which the DataContext is inherited from (a data template's root inherits it from the
+                    // presenter it is shown in, not from its logical parent, a dock's or items control's own control); the logical
+                    // one only before the element is in the visual tree
+                    var parent = (styled as Visual)?.GetVisualParent() ?? styled.Parent as AvaloniaObject;
+                    if (parent != null)
+                        return parent;
+                }
                 return element;
             }
 

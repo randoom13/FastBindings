@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
 using Avalonia.Headless.XUnit;
 using FastBindings.Tests.Views;
 using Xunit;
@@ -141,17 +142,40 @@ namespace FastBindings.Tests
         [AvaloniaFact]
         public void A_dot_binds_the_DataContext_itself_and_a_DataContext_binding_reads_the_parent()
         {
-            var vm = new Vm { Items = new[] { "one", "two" }, Child = new Leaf { A = "leaf" } };
+            var vm = new Vm { Items = new[] { "one", "two" }, Child = new Leaf { A = "leaf" }, Maybe = "from the view" };
             using var ui = Ui.Show(new Identity(), vm);
             var texts = ui.Find<ItemsControl>("List").GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
             Assert.Equal(new[] { "one", "two" }, texts);
 
             Assert.Same(vm.Child, ui.Find<StackPanel>("Inner").DataContext);
             Assert.Equal("leaf", ui.Find<TextBlock>("Text").Text);
+            Assert.Equal("from the view", ui.Find<TextBlock>("ByBase").Text);
             vm.Child = new Leaf { A = "new" };
             Ui.Settle();
             Assert.Same(vm.Child, ui.Find<StackPanel>("Inner").DataContext);
             Assert.Equal("new", ui.Find<TextBlock>("Text").Text);
+            string? InTemplate() => ui.Find<ContentControl>("Host").GetVisualDescendants().OfType<TextBlock>().SingleOrDefault()?.Text;
+            Assert.Equal("new", InTemplate());
+            vm.Child = new Leaf { A = "newer" };
+            Ui.Settle();
+            Assert.Equal("newer", InTemplate());
+        }
+
+        /// <summary>
+        /// A view moved to another view-model (a dock reusing one view for its tabs) writes nothing into either: Avalonia's combo
+        /// box clears its selection and sets the new one when the DataContext update ends, and neither is written back.
+        /// </summary>
+        [AvaloniaFact]
+        public void Swapping_the_DataContext_writes_no_selection_back()
+        {
+            var first = new Picker { Name = "first", Items = new[] { "a", "b" }, Selected = "b" };
+            var second = new Picker { Name = "second", Items = new[] { "x", "y" }, Selected = "x" };
+            first.Changes.Clear(); second.Changes.Clear();
+            using var ui = Ui.Show(new SwapCombo(), first);
+            var combo = ui.Find<ComboBox>("Combo");
+            ui.View.DataContext = second;
+            Ui.Settle();
+            Assert.True(first.Changes.Count == 0 && second.Changes.Count == 0, $"first: {string.Join(",", first.Changes)}; second: {string.Join(",", second.Changes)}");
         }
 
         /// <summary>A view-model that lives on does not keep a view it was shown in alive.</summary>
