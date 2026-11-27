@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:f="clr-namespace:FastBindings;assembly=FastBinding.MAUI" xmlns:b="clr-namespace:MauiBench" x:Class="MauiBench.Views.Fast">
+  <VerticalStackLayout>
+    <Label Text="{f:CommonBinding S0}" WidthRequest="{f:CommonBinding D0}" IsVisible="{f:CommonBinding B}" />
+    <Label Text="{f:CommonBinding S1}" WidthRequest="{f:CommonBinding D1}" IsVisible="{f:CommonBinding B}" />
+    <Label Text="{f:CommonBinding S2}" WidthRequest="{f:CommonBinding D2}" IsVisible="{f:CommonBinding B}" />
+    <Label Text="{f:CommonBinding S3}" WidthRequest="{f:CommonBinding D0}" IsVisible="{f:CommonBinding B}" />
+    <Label Text="{f:CommonBinding S4}" WidthRequest="{f:CommonBinding D1}" IsVisible="{f:CommonBinding B}" />
+    <Label Text="{f:CommonBinding S5}" WidthRequest="{f:CommonBinding D2}" IsVisible="{f:CommonBinding B}" />
+    <Label Text="{f:CommonBinding S6}" WidthRequest="{f:CommonBinding D0}" IsVisible="{f:CommonBinding B}" />
+    <Label Text="{f:CommonBinding S7}" WidthRequest="{f:CommonBinding D1}" IsVisible="{f:CommonBinding B}" />
+    <Label Text="{f:CommonBinding S8}" WidthRequest="{f:CommonBinding D2}" IsVisible="{f:CommonBinding B}" />
+    <Label Text="{f:CommonBinding S9}" WidthRequest="{f:CommonBinding D0}" IsVisible="{f:CommonBinding B}" />
+  </VerticalStackLayout>
+</ContentView>

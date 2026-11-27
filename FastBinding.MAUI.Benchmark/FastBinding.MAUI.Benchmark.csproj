@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Classic {Binding}, compiled {Binding} (x:DataType) and FastBindings' CommonBinding on the same views, with no platform
+       (a Window raises Loaded). See README.md for how to run it. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>MauiBench</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <!-- XAML compiled (XamlC) in every configuration, as an app's Release build -->
+    <_MauiForceXamlCForDebug>True</_MauiForceXamlCForDebug>
+    <MauiVersion Condition="'$(MauiVersion)' == ''">8.0.100</MauiVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+    <MauiXaml Update="Views\*.xaml" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FastBinding.MAUI\FastBinding.MAUI.csproj" />
+  </ItemGroup>
+</Project>

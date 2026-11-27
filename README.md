@@ -27,3 +27,13 @@ dotnet test FastBinding.MAUI.Tests -p:MauiCoreOnly=true
 
 It has the same bug tests (but the hidden-part one, which is Avalonia's layout) plus a test that values arrive with the
 BindingContext, before Loaded; seven fail on 1.1.3.
+
+`FastBinding.MAUI.Benchmark` times classic `{Binding}`, compiled `{Binding}` (`x:DataType`) and `CommonBinding` on the same views
+(200 views of 30 bindings by default; build, bind, attach, value changes and detach apart):
+
+```
+dotnet run -c Release --project FastBinding.MAUI.Benchmark -p:MauiCoreOnly=true
+```
+
+`VIEWS` and `ROUNDS` set the size, `ONLY` runs the kinds whose name contains it, `DIAG=1` prints `FastBindingsDiagnostics` for one
+round of `CommonBinding`.
