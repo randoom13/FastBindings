@@ -2,6 +2,7 @@
 using System;
 using System.Linq;
 using System.Windows;
+using System.Runtime.CompilerServices;
 
 namespace FastBindings.StateManagerObjects
 {
@@ -11,6 +12,7 @@ namespace FastBindings.StateManagerObjects
 
         public const string ErrorMessage = "[FastBinding] An error occurred while attempting to get data from the source property";
         public const string AsyncErrorMessage = "[AsyncFastBinding] An error occurred while attempting to get data from the source property";
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static ISourceStateManager[] Build<T>(string sources, DependencyObject targetObject,
 DataContextParams dataContextParams, CacheStrategy strategy, IViewModelTreeHelper<T> treeHelper)
         {
@@ -39,6 +41,7 @@ DataContextParams dataContextParams, CacheStrategy strategy, IViewModelTreeHelpe
                 ToArray();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static ISourceStateManager Parse<T>(string property, DependencyObject targetObject, DataContextParams dataContextParams,
         ICache? cache, IViewModelTreeHelper<T> treeHelper)
         {
