@@ -131,6 +131,8 @@ if (profile != null)
     string P(string phase) => $"{Median(ms[profile][phase].Skip(Steps.UnmarkedRounds)):N2} ms";
     Console.WriteLine($"[avalonia-bench] profiled {profile}: {rounds - Steps.UnmarkedRounds} rounds after {Steps.UnmarkedRounds} unmarked warm-up rounds; " +
                       $"stopwatch medians create {P("create")}  bind {P("bind")}  layout {P("layout")}  push {P("push")}  layout after {P("layout after")}  unbind {P("unbind")}");
+    foreach (var (step, t) in Steps.Spent)
+        Console.WriteLine($"[avalonia-bench] {step,-12} {t.Total / (rounds - Steps.UnmarkedRounds),8:F2} ms per round, of which the runtime was paused for GC {t.Gc / (rounds - Steps.UnmarkedRounds),8:F2} ms");
     return 0;
 }
 
@@ -160,6 +162,19 @@ namespace AvaloniaBench
         public static void Run(string phase, Action work)
         {
             if (!Marked) { work(); return; }
+            // how much of each step the runtime was stopped for a garbage collection (PROFILE prints it)
+            var pause = GC.GetTotalPauseDuration(); var sw = System.Diagnostics.Stopwatch.StartNew();
+            try { Marked1(phase, work); }
+            finally
+            {
+                Spent.TryGetValue(phase, out var t);
+                Spent[phase] = (t.Total + sw.Elapsed.TotalMilliseconds, t.Gc + (GC.GetTotalPauseDuration() - pause).TotalMilliseconds);
+            }
+        }
+        public static readonly Dictionary<string, (double Total, double Gc)> Spent = new();
+
+        static void Marked1(string phase, Action work)
+        {
             switch (phase)
             {
                 case "create": Step_Create(work); break;

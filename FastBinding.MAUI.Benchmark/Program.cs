@@ -62,6 +62,8 @@ namespace MauiBench
                     $"mean {measured.Average(f):F2} max {measured.Max(f):F2}";
                 Console.WriteLine($"[maui-bench] spread: build {Spread(m => m.Build)}  bind {Spread(m => m.Bind)}  attach {Spread(m => m.Attach)}  detach {Spread(m => m.Detach)}  " +
                                   $"GC collections gen0 {GC.CollectionCount(0)} gen1 {GC.CollectionCount(1)} gen2 {GC.CollectionCount(2)}");
+                foreach (var (step, t) in Spent)
+                    Console.WriteLine($"[maui-bench] {step,-12} {t.Total / Rounds,8:F2} ms per round, of which the runtime was paused for GC {t.Gc / Rounds,8:F2} ms");
                 return;
             }
             foreach (var (name, make) in kinds)
@@ -83,7 +85,17 @@ namespace MauiBench
         // Each step runs inside a method of its own name, so a CPU profile tells the steps apart (and never inlined away).
         // Steps run in their Step_ method only while Marked (PROFILE turns it off for the warm-up rounds, so they leave no marks).
         static bool Marked = true;
-        static void In(Action<Action> step, Action a) { if (Marked) step(a); else a(); }
+        static void In(Action<Action> step, Action a)
+        {
+            if (!Marked) { a(); return; }
+            // how much of each step was the runtime stopped for a garbage collection (PROFILE prints it beside the medians)
+            var pause = GC.GetTotalPauseDuration(); var sw = Stopwatch.StartNew();
+            step(a);
+            var name = step.Method.Name;
+            Spent.TryGetValue(name, out var t);
+            Spent[name] = (t.Total + sw.Elapsed.TotalMilliseconds, t.Gc + (GC.GetTotalPauseDuration() - pause).TotalMilliseconds);
+        }
+        static readonly Dictionary<string, (double Total, double Gc)> Spent = new();
         [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Build(Action a) => a();
         [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Bind(Action a) => a();
         [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Attach(Action a) => a();

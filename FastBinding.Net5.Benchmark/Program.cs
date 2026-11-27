@@ -113,13 +113,39 @@ namespace WpfBench
             Console.WriteLine($"[wpf-bench] profiled {kind.Name}: {Rounds} rounds after {warmup} unmarked warm-up rounds; stopwatch medians " +
                               $"build {Med(m, x => x.Build):F2} ms  bind {Med(m, x => x.Bind):F2} ms  attach {Med(m, x => x.Attach):F2} ms  " +
                               $"push {Med(m, x => x.Push) * 1000:F3} µs per binding updated  detach {Med(m, x => x.Detach):F2} ms");
+            Console.WriteLine($"[wpf-bench] GC collections gen0 {GC.CollectionCount(0)} gen1 {GC.CollectionCount(1)} gen2 {GC.CollectionCount(2)}");
+            foreach (var entry in Spent)
+                Console.WriteLine($"[wpf-bench] {entry.Key,-12} {entry.Value.Total / Rounds,8:F2} ms per round" +
+#if NET
+                                  $", of which the runtime was paused for GC {entry.Value.Gc / Rounds,8:F2} ms"
+#else
+                                  ""
+#endif
+                                  );
             return 0;
         }
 
         // Each step runs inside a method of its own name, so a CPU profile tells the steps apart (and never inlined away).
         // Steps run in their Step_ method only while Marked (PROFILE turns it off for the warm-up rounds, so they leave no marks).
         static bool Marked = true;
-        static void In(Action<Action> step, Action a) { if (Marked) step(a); else a(); }
+        static void In(Action<Action> step, Action a)
+        {
+            if (!Marked) { a(); return; }
+#if NET
+            // how much of each step the runtime was stopped for a garbage collection (PROFILE prints it; .NET Framework cannot tell)
+            var pause = GC.GetTotalPauseDuration();
+#endif
+            var sw = Stopwatch.StartNew();
+            step(a);
+            var gc = 0.0;
+#if NET
+            gc = (GC.GetTotalPauseDuration() - pause).TotalMilliseconds;
+#endif
+            var name = step.Method.Name;
+            Spent.TryGetValue(name, out var t);
+            Spent[name] = (t.Total + sw.Elapsed.TotalMilliseconds, t.Gc + gc);
+        }
+        static readonly Dictionary<string, (double Total, double Gc)> Spent = new Dictionary<string, (double Total, double Gc)>();
         [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Build(Action a) => a();
         [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Bind(Action a) => a();
         [MethodImpl(MethodImplOptions.NoInlining)] static void Step_Attach(Action a) => a();
