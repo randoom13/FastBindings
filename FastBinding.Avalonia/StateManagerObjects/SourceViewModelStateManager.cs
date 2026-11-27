@@ -47,6 +47,8 @@ namespace FastBindings.StateManagerObjects
         internal void Initialize(IViewModelTreeHelper<T> tree) 
         {
             _viewModelTree = tree;
+            // "." is the DataContext itself, as Avalonia's {Binding} without a path: nothing to subscribe to, read as it is
+            _identity = _propertyNamePath == IdentityPath;
             var names = CommonViewModelTreeHelper.Segments(_propertyNamePath);
             _singleName = tree is LightViewModelTreeHelper && names.Length == 1 ? names[0] : null;
         }
@@ -56,6 +58,8 @@ namespace FastBindings.StateManagerObjects
         // looked the getter up by type and then by name (about 0.6 µs per binding started on MAUI, ADR-free measurement in the
         // fork's README). Other paths and tree helpers read as before.
         private string? _singleName;
+        internal const string IdentityPath = ".";
+        private bool _identity;
         private Reader? _reader;
 
         private sealed class Reader
@@ -76,6 +80,8 @@ namespace FastBindings.StateManagerObjects
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public object? GetSourceProperty(object? dataContext, bool isWrapException)
         {
+            if (_identity)
+                return dataContext;
             var name = _singleName;
             if (name != null && dataContext != null)
             {
@@ -99,6 +105,8 @@ namespace FastBindings.StateManagerObjects
 
         public Task<object?> GetSourcePropertyAsync(object? dataContext, bool isWrapException)
         {
+            if (_identity)
+                return Task.FromResult(dataContext);
             return ExceptionUtility.AsyncHandle(() =>
                   _viewModelTree?.GetViewModelProperty(_propertyNamePath, dataContext),
                 isWrapException, StateManagerFactory.AsyncErrorMessage);
@@ -106,6 +114,8 @@ namespace FastBindings.StateManagerObjects
 
         public void SetSourceProperty(object? value)
         {
+            if (_identity)
+                return;   // the DataContext itself: nothing to write back into
             var target = _targetObjectRef.Target as AvaloniaObject;
             if (target == null)
                 return;

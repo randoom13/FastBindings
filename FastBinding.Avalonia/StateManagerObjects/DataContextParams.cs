@@ -15,11 +15,20 @@ namespace FastBindings.StateManagerObjects
 
         public string? DataContextSource { get; set; }
 
+        /// <summary>
+        /// A binding of the DataContext property itself reads its path from the parent's DataContext, as Avalonia's own binding does;
+        /// read from the control's own DataContext it would read the value it has just set.
+        /// </summary>
+        public bool FromParent { get; set; }
+
         public AvaloniaObject GetDataContextTarget(AvaloniaObject target)
         {
             if (string.IsNullOrEmpty(DataContextSource))
             {
-                return AnchorObject ?? target;
+                var element = AnchorObject ?? target;
+                if (FromParent && element is StyledElement styled && styled.Parent is AvaloniaObject parent)
+                    return parent;
+                return element;
             }
 
             return PropertyPathParser.CalculateSource(AnchorObject ?? target, DataContextSource) ?? target;

@@ -87,6 +87,7 @@ namespace FastBindings.BindingManagers
             _targetObjectRef.Target = targetObject;
             _targetPropertyRef.Target = targetProperty;
             _dataContextParams.AnchorObject = dataContextObj;
+            _dataContextParams.FromParent = targetProperty == StyledElement.DataContextProperty;
         }
 
         // While Initialize runs, a change of the target is not written to the source: GetObservable(targetProperty) reports the

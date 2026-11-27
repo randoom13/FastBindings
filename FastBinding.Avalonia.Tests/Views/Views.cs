@@ -15,4 +15,5 @@ namespace FastBindings.Tests.Views
     public partial class Fallback : UserControl { public Fallback() => AvaloniaXamlLoader.Load(this); }
     public partial class NullValue : UserControl { public NullValue() => AvaloniaXamlLoader.Load(this); }
     public partial class Accessor : UserControl { public Accessor() => AvaloniaXamlLoader.Load(this); }
+    public partial class Identity : UserControl { public Identity() => AvaloniaXamlLoader.Load(this); }
 }

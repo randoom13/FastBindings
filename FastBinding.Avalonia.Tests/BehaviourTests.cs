@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.Headless.XUnit;
 using FastBindings.Tests.Views;
 using Xunit;
@@ -133,6 +135,23 @@ namespace FastBindings.Tests
             vm.A = "changed";
             Ui.Settle();
             Assert.Equal("changed", ui.Find<TextBlock>("Text").Text);
+        }
+
+        /// <summary>"." binds the DataContext itself, as Avalonia's {Binding} without a path; a binding of DataContext reads the parent's.</summary>
+        [AvaloniaFact]
+        public void A_dot_binds_the_DataContext_itself_and_a_DataContext_binding_reads_the_parent()
+        {
+            var vm = new Vm { Items = new[] { "one", "two" }, Child = new Leaf { A = "leaf" } };
+            using var ui = Ui.Show(new Identity(), vm);
+            var texts = ui.Find<ItemsControl>("List").GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
+            Assert.Equal(new[] { "one", "two" }, texts);
+
+            Assert.Same(vm.Child, ui.Find<StackPanel>("Inner").DataContext);
+            Assert.Equal("leaf", ui.Find<TextBlock>("Text").Text);
+            vm.Child = new Leaf { A = "new" };
+            Ui.Settle();
+            Assert.Same(vm.Child, ui.Find<StackPanel>("Inner").DataContext);
+            Assert.Equal("new", ui.Find<TextBlock>("Text").Text);
         }
 
         /// <summary>A view-model that lives on does not keep a view it was shown in alive.</summary>
