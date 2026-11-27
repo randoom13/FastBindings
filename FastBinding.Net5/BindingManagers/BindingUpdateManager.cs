@@ -289,6 +289,19 @@ namespace FastBindings.BindingManagers
 
         private void RefreshDirect()
         {
+            var timing = FastBindingsDiagnostics.Begin();
+            try
+            {
+                RefreshDirectUntimed();
+            }
+            finally
+            {
+                FastBindingsDiagnostics.End(ref FastBindingsDiagnostics._refreshTicks, timing);
+            }
+        }
+
+        private void RefreshDirectUntimed()
+        {
             Volatile.Write(ref _refreshQueued, 0);   // before reading: a change from now on asks again
             _direct?.RefreshFromCurrent();
         }
@@ -380,6 +393,19 @@ namespace FastBindings.BindingManagers
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            var timing = FastBindingsDiagnostics.Begin();
+            try
+            {
+                OnDataContextChangedUntimed(sender, e);
+            }
+            finally
+            {
+                FastBindingsDiagnostics.End(ref FastBindingsDiagnostics._dataContextTicks, timing);
+            }
+        }
+
+        private void OnDataContextChangedUntimed(object sender, DependencyPropertyChangedEventArgs e)
         {
             FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._dataContextChanges);
             var target = _targetObjectRef.Target as DependencyObject;
@@ -516,6 +542,19 @@ namespace FastBindings.BindingManagers
         }
 
         private void OnDependencyPropertyChanged(object? newValue)
+        {
+            var timing = FastBindingsDiagnostics.Begin();
+            try
+            {
+                OnDependencyPropertyChangedUntimed(newValue);
+            }
+            finally
+            {
+                FastBindingsDiagnostics.End(ref FastBindingsDiagnostics._sourceWriteTicks, timing);
+            }
+        }
+
+        private void OnDependencyPropertyChangedUntimed(object? newValue)
         {
             if (_updatingTarget || _initializing)
                 return;

@@ -65,6 +65,19 @@ namespace FastBindings.StateManagerObjects
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnPropertyChanged(object? sender, PropertyChangedEventArgs args)
         {
+            var timing = FastBindingsDiagnostics.Begin();
+            try
+            {
+                OnPropertyChangedUntimed(sender, args);
+            }
+            finally
+            {
+                FastBindingsDiagnostics.End(ref FastBindingsDiagnostics._sourceChangeTicks, timing);
+            }
+        }
+
+        private void OnPropertyChangedUntimed(object? sender, PropertyChangedEventArgs args)
+        {
             IHubSubscriber? single = null;
             IHubSubscriber[]? several = null;
             lock (_gate)

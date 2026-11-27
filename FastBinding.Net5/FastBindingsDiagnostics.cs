@@ -72,8 +72,53 @@ namespace FastBindings
                 Interlocked.Increment(ref counter);
         }
 
+        // ---- time spent inside FastBindings, measured where WPF (or a view-model) calls into it ----
+
+        /// <summary>In ProvideValue: XAML creating the binding (and starting it when its control already has a DataContext).</summary>
+        public static System.TimeSpan ProvideValueTime => Ticks(_provideValueTicks);
+        /// <summary>Starting a binding later, on Loaded (bindings that do not start in ProvideValue).</summary>
+        public static System.TimeSpan LateStartTime => Ticks(_lateStartTicks);
+        /// <summary>Handling DataContext changes (reading the values, subscribing, writing the targets).</summary>
+        public static System.TimeSpan DataContextTime => Ticks(_dataContextTicks);
+        /// <summary>Handling a view-model's PropertyChanged: every binding told of it, its value read and written into the target.</summary>
+        public static System.TimeSpan SourceChangeTime => Ticks(_sourceChangeTicks);
+        /// <summary>Reading a path's end again on the UI thread after a change on another thread.</summary>
+        public static System.TimeSpan RefreshTime => Ticks(_refreshTicks);
+        /// <summary>A two-way binding writing its target's change into the source.</summary>
+        public static System.TimeSpan SourceWriteTime => Ticks(_sourceWriteTicks);
+        /// <summary>All of the above, each moment counted once (a call made from inside another is not added again).</summary>
+        public static System.TimeSpan TotalTime => Ticks(_totalTicks);
+
+        internal static long _provideValueTicks, _lateStartTicks, _dataContextTicks, _sourceChangeTicks, _refreshTicks, _sourceWriteTicks, _totalTicks;
+
+        [System.ThreadStatic] private static int _depth;
+
+        private static System.TimeSpan Ticks(long ticks) =>
+            System.TimeSpan.FromTicks(Interlocked.Read(ref ticks) * System.TimeSpan.TicksPerSecond / System.Diagnostics.Stopwatch.Frequency);
+
+        /// <summary>Starts timing an entry into FastBindings (0 while not <see cref="Enabled"/>: nothing is measured).</summary>
+        internal static long Begin()
+        {
+            if (!Enabled)
+                return 0;
+            _depth++;
+            return System.Diagnostics.Stopwatch.GetTimestamp();
+        }
+
+        /// <summary>Adds the time since <paramref name="start"/> to <paramref name="ticks"/>, and to the total when it is the outermost entry.</summary>
+        internal static void End(ref long ticks, long start)
+        {
+            if (start == 0)
+                return;
+            var elapsed = System.Diagnostics.Stopwatch.GetTimestamp() - start;
+            Interlocked.Add(ref ticks, elapsed);
+            if (--_depth == 0)
+                Interlocked.Add(ref _totalTicks, elapsed);
+        }
+
         public static void Reset()
         {
+            _provideValueTicks = _lateStartTicks = _dataContextTicks = _sourceChangeTicks = _refreshTicks = _sourceWriteTicks = _totalTicks = 0;
             _started = _dataContextChanges = _directPushes = _generalPushes = _targetWrites = _sourceWrites = _resubscriptions = _resubscriptionRetries = 0;
             _compiles = _compileTicks = _delegates = 0;
         }

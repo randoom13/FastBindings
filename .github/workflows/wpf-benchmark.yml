@@ -36,7 +36,7 @@ jobs:
         run: |
           for i in $(seq 1 ${{ github.event.inputs.runs || 3 }}); do
             for shared in 1 0; do   # one view-model for every view, then one per view
-              SHARED=$shared LABEL="runner ${{ matrix.runner }} run $i, this branch" dotnet out/branch/FastBinding.Net5.Benchmark.dll
+              SHARED=$shared DIAG=1 LABEL="runner ${{ matrix.runner }} run $i, this branch" dotnet out/branch/FastBinding.Net5.Benchmark.dll
               SHARED=$shared LABEL="runner ${{ matrix.runner }} run $i, 1.1.3" ONLY=Fast ROUNDS=5 dotnet out/old/FastBinding.Net5.Benchmark.dll
             done
           done
