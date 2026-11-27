@@ -1,0 +1,40 @@
+<UserControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:f="clr-namespace:FastBindings;assembly=FastBinding.Net5" xmlns:t="clr-namespace:FastBindings.Tests"
+             x:Class="FastBindings.Tests.Views.Faults">
+  <!-- every way a binding can fail, one element each (BindingLoggerTests) -->
+  <StackPanel>
+    <TextBlock x:Name="Getter" Text="{f:CommonBinding Throws}" />
+    <TextBox x:Name="Setter" Text="{f:CommonBinding Rejects, Mode=TwoWay}" />
+    <TextBlock x:Name="Forward" Text="{f:CommonBinding A, ConverterName=Explode}" />
+    <TextBox x:Name="Back" Text="{f:CommonBinding A, Mode=TwoWay, ConverterName=ExplodeBack}" />
+    <Grid>
+      <!-- Row starts at 0: a value WPF refuses in XAML would stop the view loading; it is set to -1 later -->
+      <Border x:Name="Refused" Grid.Row="{f:CommonBinding Row}" />
+    </Grid>
+    <Border x:Name="Method" Tag="{Binding A}">
+      <f:AttachedOneWayBindings.Collections>
+        <f:OneWayBindingCollection>
+          <f:OneWayCommonBinding Sources="$[[this].Tag]" Target="Fail(" />
+        </f:OneWayBindingCollection>
+      </f:AttachedOneWayBindings.Collections>
+    </Border>
+    <t:Poker x:Name="Event">
+      <f:AttachedOneWayBindings.Collections>
+        <f:OneWayBindingCollection>
+          <f:OneWayCommonBinding Sources="$[[this].Poked][EventArgs.Value]" Target="Received" />
+        </f:OneWayBindingCollection>
+      </f:AttachedOneWayBindings.Collections>
+    </t:Poker>
+    <TextBlock x:Name="Async" Text="{f:AsyncCommonBinding Failing}" />
+    <TextBox x:Name="Notification" Text="{f:CommonBinding A, Mode=TwoWay, NotificationName=Boom}" />
+    <TextBlock x:Name="Invalid" Text="{f:CommonBinding '$[[Nowhere'}" />
+    <TextBlock x:Name="Missing" Text="{f:CommonBinding Misspeled, FallBackValue=fallback}" />
+    <TextBox x:Name="NoGetter" Text="{f:CommonBinding WriteOnly, Mode=TwoWay}" />
+    <TextBox x:Name="NoSetter" Text="{f:CommonBinding ReadOnly, Mode=TwoWay}" />
+    <TextBox x:Name="Mismatch" Text="{f:CommonBinding Count, Mode=TwoWay}" />
+    <Border x:Name="NotAssignable" Width="{f:CommonBinding A}" />
+    <TextBlock x:Name="Ancestor" Text="{f:CommonBinding A, DataContextSource=ListBox/1}" />
+    <TextBlock x:Name="NoConverter" Text="{f:CommonBinding A, ConverterName=Upper, ConverterPath=A}" />
+    <TextBlock x:Name="Fine" Text="{f:CommonBinding A}" />
+  </StackPanel>
+</UserControl>

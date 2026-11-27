@@ -10,14 +10,13 @@ namespace FastBindings.StateManagerObjects
         {
             _ex = ex;
         }
-        public event EventHandlerEx<object> PropertyUpdated
+        public event EventHandler<object> PropertyUpdated
         { add { } remove { } }
+        public object? GetSourceProperty(object? dataContext, bool isWrapException) =>
+    isWrapException ? new ExceptionHolder(_ex) : _ex;
 
-        public object GetSourceProperty(object dataContext, bool isWrapException) =>
-            isWrapException ? (object)new ExceptionHolder(_ex) : _ex;
-
-        public void SetSourceProperty(object value) { }
-        public void Subscribe(object dataContext) { }
+        public void SetSourceProperty(object? value) { }
+        public void Subscribe(object? dataContext) { }
         public void Unsubscribe() { }
     }
 }

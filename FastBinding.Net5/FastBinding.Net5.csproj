@@ -3,6 +3,8 @@
     <TargetFramework>net5.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
+    <!-- builds on any machine (Windows' reference assemblies come from NuGet) -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RootNamespace>FastBindings</RootNamespace>
     <AssemblyName>FastBinding.Net5</AssemblyName>
     <PackageTags>#Binding #AsyncBinding #WPF #MAUI #Avalonia</PackageTags>

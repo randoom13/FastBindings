@@ -1,6 +1,9 @@
-﻿using Avalonia;
+using Avalonia;
+using FastBindings.Diagnostics;
 using FastBindings.Helpers;
 using System;
+using System.Runtime.CompilerServices;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -22,7 +25,7 @@ namespace FastBindings.StateManagerObjects
         Task<object?> GetSourcePropertyAsync(object? dataContext, bool isWrapException);
     }
 
-    internal class SourceViewModelStateManager<T> : ISourceStateManager, IAsyncSourceStateManager
+    internal class SourceViewModelStateManager<T> : ISourceStateManager, IAsyncSourceStateManager, IListenable, IDescribedSource
     {
         private bool _updatingViewModel = false;
 
@@ -33,6 +36,9 @@ namespace FastBindings.StateManagerObjects
         private IViewModelTreeHelper<T>? _viewModelTree;
 
         public bool SupportAsync { get; set; } = false;
+
+        /// <summary>The binding this source belongs to, for reporting what happens in its handlers (null while no logger is set).</summary>
+        public BindingDescription? Description { get; set; }
 
         public SourceViewModelStateManager(string propertyName, AvaloniaObject targetObject,
             DataContextParams dataContextParms)
@@ -45,7 +51,29 @@ namespace FastBindings.StateManagerObjects
         internal void Initialize(IViewModelTreeHelper<T> tree) 
         {
             _viewModelTree = tree;
+            // "." is the DataContext itself, as Avalonia's {Binding} without a path: nothing to subscribe to, read as it is
+            _identity = _propertyNamePath == IdentityPath;
+            var names = CommonViewModelTreeHelper.Segments(_propertyNamePath);
+            _singleName = tree is LightViewModelTreeHelper && names.Length == 1 ? names[0] : null;
         }
+
+        // A path of one name read through LightViewModelTreeHelper: the property's getter is looked up once per source type and
+        // kept here, so a read is one type check and one delegate call. Before, every read built the path's entries again and
+        // looked the getter up by type and then by name (about 0.6 µs per binding started on MAUI, ADR-free measurement in the
+        // fork's README). Other paths and tree helpers read as before.
+        private string? _singleName;
+        internal const string IdentityPath = ".";
+        private bool _identity;
+        private Reader? _reader;
+
+        private sealed class Reader
+        {
+            public Reader(Type type, PropertyInfoResult property) { Type = type; Property = property; }
+            public readonly Type Type;
+            public readonly PropertyInfoResult Property;
+        }
+
+        public void Listen(object target, Action<object, object, object?> open) => _propertyUpdatedPublisher.Listen(target, open);
 
         public event EventHandler<object> PropertyUpdated
         {
@@ -53,22 +81,45 @@ namespace FastBindings.StateManagerObjects
             remove { _propertyUpdatedPublisher.Unsubscribe(value); }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public object? GetSourceProperty(object? dataContext, bool isWrapException)
         {
+            if (_identity)
+                return dataContext;
+            var name = _singleName;
+            if (name != null && dataContext != null)
+            {
+                try
+                {
+                    var type = dataContext.GetType();
+                    var reader = _reader;
+                    if (reader == null || !ReferenceEquals(reader.Type, type))
+                        _reader = reader = new Reader(type, MembersHelper.GetPropertyAccessor(type).Find(name));
+                    return reader.Property.Get(type, dataContext);
+                }
+                catch (Exception ex)
+                {
+                    return ExceptionUtility.Wrap(ex, isWrapException, StateManagerFactory.ErrorMessage, binding: Description);
+                }
+            }
             return ExceptionUtility.Handle(() =>
             _viewModelTree?.GetViewModelProperty(_propertyNamePath, dataContext),
-            isWrapException, StateManagerFactory.ErrorMessage);
+            isWrapException, StateManagerFactory.ErrorMessage, binding: Description);
         }
 
         public Task<object?> GetSourcePropertyAsync(object? dataContext, bool isWrapException)
         {
+            if (_identity)
+                return Task.FromResult(dataContext);
             return ExceptionUtility.AsyncHandle(() =>
                   _viewModelTree?.GetViewModelProperty(_propertyNamePath, dataContext),
-                isWrapException, StateManagerFactory.AsyncErrorMessage);
+                isWrapException, StateManagerFactory.AsyncErrorMessage, Description);
         }
 
         public void SetSourceProperty(object? value)
         {
+            if (_identity)
+                return;   // the DataContext itself: nothing to write back into
             var target = _targetObjectRef.Target as AvaloniaObject;
             if (target == null)
                 return;
@@ -85,9 +136,33 @@ namespace FastBindings.StateManagerObjects
             }
         }
 
+        /// <summary>
+        /// Set by a plain binding (no converter, notification, cache or async): told the object the path ends on and the last name,
+        /// it writes the value into its target itself and returns true; false sends this change down the general path below.
+        /// </summary>
+        internal Func<object, string, bool>? DirectPush { get; set; }
+
+        /// <summary>Tells the binding the value at the path's current end again, read now (on the UI thread, by the direct path).</summary>
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        internal void RefreshFromCurrent()
+        {
+            ViewModelPropertyInfo<T>? info;
+            lock (_gate)
+            {
+                info = _handlerArgs?.FinalPropertyInfo;
+            }
+            if (info != null)
+                OnPropertyChanged(info);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnPropertyChanged(ViewModelPropertyInfo<T> finalPropertyInfo)
         {
             if (_updatingViewModel || finalPropertyInfo == null)
+                return;
+            using var scope = BindingLog.Enter(Description, _targetObjectRef?.Target);
+            if (DirectPush != null && Cache == null && !SupportAsync && finalPropertyInfo.Accessor is object last
+                && DirectPush(last, finalPropertyInfo.Name))
                 return;
 
             object? value;
@@ -107,10 +182,8 @@ namespace FastBindings.StateManagerObjects
             }
             catch (Exception ex)
             {
-                var header = SupportAsync ? "[AsyncFastBinding]" : "[FastBinding]";
-                System.Diagnostics.Debug.Write($"{header} An error occurred to {finalPropertyInfo.Name} from {finalPropertyInfo.Accessor}");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.GetterThrew, ex, $"reading {finalPropertyInfo.Name} of {finalPropertyInfo.Accessor?.GetType().Name ?? "null"}",
+                    dataContextType: _dataContext?.GetType(), binding: Description);
                 value = new ExceptionHolder(ex);
                 _propertyUpdatedPublisher.RaiseEvent(this, value);
             }
@@ -127,82 +200,185 @@ namespace FastBindings.StateManagerObjects
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[AsyncFastBinding] An error occurred to {finalPropertyInfo.Name} from {finalPropertyInfo.Accessor}");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.AsyncSourceFaulted, ex, $"awaiting {finalPropertyInfo.Name} of {finalPropertyInfo.Accessor?.GetType().Name ?? "null"}",
+                    dataContextType: _dataContext?.GetType(), binding: Description);
                 value = new ExceptionHolder(ex);
                 _propertyUpdatedPublisher.RaiseEvent(this, value);
             }
         }
 
+        // Subscribe runs on the UI thread (DataContext changes) and, when an object in the middle of the path changes, on whatever
+        // thread raised that change: the subscriptions and the handler args change only under this lock.
+        private readonly object _gate = new object();
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public void Subscribe(object? dataContext)
         {
-            var subscribers = _viewModelTree?.CalculateSubscribers(_propertyNamePath, dataContext)?.ToArray();
-            if (subscribers == null || !subscribers.Any() || !subscribers.Any(it => it.Accessor is INotifyPropertyChanged))
+            lock (_gate)
             {
-                return;
+                SubscribeCore(dataContext);
             }
-            _handlerArgs = new SubscriberHandlerArgs(this, subscribers.Last());
-            foreach (var propertyInfo in subscribers.Where(it => it.Accessor is INotifyPropertyChanged))
+        }
+
+        /// <summary>
+        /// Subscribes again along the path from the same DataContext — only if <paramref name="current"/> is still this manager's
+        /// subscription, checked and done under one lock. A change raised on a worker thread could otherwise pass the check, lose
+        /// the race to a DataContext change on the UI thread, and then subscribe the binding to the view-model it had left.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private bool ResubscribeIfCurrent(SubscriberHandlerArgs current, out ViewModelPropertyInfo<T> final)
+        {
+            lock (_gate)
             {
-                Subscribe(propertyInfo, _handlerArgs);
+                final = null!;
+                if (!ReferenceEquals(current, _handlerArgs))
+                    return false;
+                SubscribeCore(_dataContext);
+                if (_handlerArgs == null)
+                    return false;
+                final = _handlerArgs.FinalPropertyInfo;
+                return true;
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private void SubscribeCore(object? dataContext)
+        {
+            // Subscribe, then read the path again: an object in the middle of it may have been replaced on another thread after it
+            // was read and before its handler was registered, and that change told nobody. If the path now reads other objects,
+            // subscribe again (a few times at most; a change after the last check is told to the handlers registered by then).
+            FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._resubscriptions);
+            for (var attempt = 0; attempt < 8; attempt++)
+            {
+                if (attempt > 0)
+                    FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._resubscriptionRetries);
+                RemoveSubscriptions();
+                _dataContext = dataContext;
+                var calculated = _viewModelTree?.CalculateSubscribers(_propertyNamePath, dataContext);
+                var subscribers = calculated as ViewModelPropertyInfo<T>[] ?? calculated?.ToArray();   // an array already: not copied
+                if (subscribers == null || subscribers.Length == 0)
+                {
+                    return;
+                }
+                if (_selfRef == null)
+                    _selfRef = new WeakReference(this);
+                _handlerArgs = new SubscriberHandlerArgs(_selfRef, subscribers[subscribers.Length - 1]);
+                for (var index = 0; index < subscribers.Length; index++)
+                {
+                    if (subscribers[index].Accessor is INotifyPropertyChanged source)
+                    {
+                        var subscription = new Subscription(_handlerArgs, subscribers[index].Name, isLast: index == subscribers.Length - 1);
+                        SourceHub.Of(source).Add(subscribers[index].Name, subscription);
+                        _subscriptions.Add((source, subscription));
+                    }
+                }
+                if (subscribers.Length == 1 || SamePath(subscribers, _viewModelTree!.CalculateSubscribers(_propertyNamePath, dataContext)))
+                {
+                    return;
+                }
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private static bool SamePath(ViewModelPropertyInfo<T>[] subscribed, IEnumerable<ViewModelPropertyInfo<T>> now)
+        {
+            var index = 0;
+            foreach (var info in now)
+            {
+                if (index >= subscribed.Length || !ReferenceEquals(info.Accessor, subscribed[index].Accessor))
+                    return false;
+                index++;
+            }
+            return index == subscribed.Length;
         }
 
         protected class SubscriberHandlerArgs
         {
-            public SubscriberHandlerArgs(SourceViewModelStateManager<T> manager, ViewModelPropertyInfo<T> finalPropertyInfo)
+            // The manager's own weak reference, shared by its subscriptions: a weak reference is a GC handle (~0.2 µs to make), and
+            // the field initializer made a second one that the constructor replaced at once.
+            public SubscriberHandlerArgs(WeakReference managerRef, ViewModelPropertyInfo<T> finalPropertyInfo)
             {
-                _managerRef = new WeakReference(manager);
+                _managerRef = managerRef;
                 FinalPropertyInfo = finalPropertyInfo;
             }
 
-            private readonly WeakReference _managerRef = new WeakReference(null);
+            private readonly WeakReference _managerRef;
             public SourceViewModelStateManager<T>? Manager => _managerRef.Target as SourceViewModelStateManager<T>;
             public ViewModelPropertyInfo<T> FinalPropertyInfo { get; private set; }
         }
 
-        private SubscriberHandlerArgs? _handlerArgs;
-        private static void Subscribe(ViewModelPropertyInfo<T> currentPropertyInfo, SubscriberHandlerArgs handlerArgs)
+        /// <summary>
+        /// One PropertyChanged handler on one object of the path. It holds the manager weakly (as before, so a view-model never keeps a
+        /// binding alive) and is removed by <see cref="Unsubscribe"/> at once, instead of on that object's next event.
+        /// </summary>
+        private sealed class Subscription : IHubSubscriber
         {
-            var currentName = currentPropertyInfo.Name;
-            PropertyChangedEventHandler? propertyChangedHandler = null;
-            propertyChangedHandler = (sender, args) =>
+            private readonly SubscriberHandlerArgs _handlerArgs;
+            private readonly string _name;
+            private readonly bool _isLast;
+
+            public Subscription(SubscriberHandlerArgs handlerArgs, string name, bool isLast)
             {
-                var handler = propertyChangedHandler;
-                if (handler == null)
+                _handlerArgs = handlerArgs;
+                _name = name;
+                _isLast = isLast;
+            }
+
+            public string Name => _name;
+
+            [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+            public void OnSourceChanged(object? sender, PropertyChangedEventArgs args)
+            {
+                var manager = _handlerArgs.Manager;
+                if (manager == null || !ReferenceEquals(_handlerArgs, manager._handlerArgs))
+                {
+                    // the binding is gone or subscribed elsewhere since: let go of this object
+                    if (sender is INotifyPropertyChanged source)
+                        SourceHub.Of(source).Remove(_name, this);
+                    return;
+                }
+                manager.Cache?.PrepareCache(_handlerArgs.FinalPropertyInfo, sender, args);
+                if (!string.IsNullOrEmpty(args.PropertyName) && args.PropertyName != _name)
                 {
                     return;
                 }
-                if (!ReferenceEquals(handlerArgs, handlerArgs.Manager?._handlerArgs))
+                if (_isLast)
                 {
-                    propertyChangedHandler = null;
-                    var viewModel = sender as INotifyPropertyChanged;
-                    if (viewModel != null)
-                    {
-                        viewModel.PropertyChanged -= handler;
-                    }
-                }
-                if (propertyChangedHandler == null)
-                {
+                    manager.OnPropertyChanged(_handlerArgs.FinalPropertyInfo);
                     return;
                 }
-                handlerArgs?.Manager?.Cache?.PrepareCache(handlerArgs.FinalPropertyInfo, sender, args);
-                if (args.PropertyName == currentName)
-                {
-                    handlerArgs?.Manager?.OnPropertyChanged(handlerArgs.FinalPropertyInfo);
-                }
-            };
-            INotifyPropertyChanged? changed = currentPropertyInfo.Accessor as INotifyPropertyChanged;
-            if (changed != null)
-            {
-                changed.PropertyChanged += propertyChangedHandler;
+                // An object in the middle of the path changed (vm.Child = new Leaf()): what the path reads is another object now.
+                // Subscribe again along the whole path and read from the new last object.
+                if (manager.ResubscribeIfCurrent(_handlerArgs, out var final))
+                    manager.OnPropertyChanged(final);
             }
         }
 
+        private SubscriberHandlerArgs? _handlerArgs;
+        private WeakReference? _selfRef;
+        private object? _dataContext;
+        private readonly List<(INotifyPropertyChanged Source, Subscription Subscription)> _subscriptions =
+            new List<(INotifyPropertyChanged, Subscription)>();
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private void RemoveSubscriptions()
+        {
+            foreach (var (source, subscription) in _subscriptions)
+            {
+                SourceHub.Of(source).Remove(subscription.Name, subscription);
+            }
+            _subscriptions.Clear();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public void Unsubscribe()
         {
-            _handlerArgs = default;
+            lock (_gate)
+            {
+                RemoveSubscriptions();
+                _handlerArgs = default;
+                _dataContext = null;
+            }
 
             Cache?.Clear();
         }

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:f="clr-namespace:FastBindings;assembly=FastBinding.MAUI" xmlns:t="clr-namespace:FastBindings.Tests"
+             x:Class="FastBindings.Tests.Views.Faults">
+  <VerticalStackLayout>
+    <Label x:Name="Getter" Text="{f:CommonBinding Throws}" />
+    <Entry x:Name="Setter" Text="{f:CommonBinding Rejects, Mode=TwoWay}" />
+    <Label x:Name="Forward" Text="{f:CommonBinding A, ConverterName=Explode}" />
+    <Entry x:Name="Back" Text="{f:CommonBinding A, Mode=TwoWay, ConverterName=ExplodeBack}" />
+    <t:Refuser x:Name="Refused" Level="{f:CommonBinding Negative}" />
+    <Label x:Name="Method" ClassId="tagged">
+      <f:AttachedOneWayBindings.Collections>
+        <f:OneWayBindingCollection>
+          <f:OneWayCommonBinding Sources="$[[this].ClassId]" Target="Fail(" />
+        </f:OneWayBindingCollection>
+      </f:AttachedOneWayBindings.Collections>
+    </Label>
+    <t:Poker x:Name="Event">
+      <f:AttachedOneWayBindings.Collections>
+        <f:OneWayBindingCollection>
+          <f:OneWayCommonBinding Sources="$[[this].Poked][EventArgs.Value]" Target="Received" />
+        </f:OneWayBindingCollection>
+      </f:AttachedOneWayBindings.Collections>
+    </t:Poker>
+    <Label x:Name="Async" Text="{f:AsyncCommonBinding Failing}" />
+    <Entry x:Name="Notification" Text="{f:CommonBinding A, Mode=TwoWay, NotificationName=Boom}" />
+    <Label x:Name="Invalid" Text="{f:CommonBinding '$[[Nowhere'}" />
+    <Label x:Name="Missing" Text="{f:CommonBinding Misspeled, FallbackValue=fallback}" />
+    <Entry x:Name="NoGetter" Text="{f:CommonBinding WriteOnly, Mode=TwoWay}" />
+    <Entry x:Name="NoSetter" Text="{f:CommonBinding ReadOnly, Mode=TwoWay}" />
+    <Entry x:Name="Mismatch" Text="{f:CommonBinding Count, Mode=TwoWay}" />
+    <BoxView x:Name="NotAssignable" WidthRequest="{f:CommonBinding A}" />
+    <Label x:Name="Ancestor" Text="{f:CommonBinding A, DataContextSource=ListView/1}" />
+    <Label x:Name="NoConverter" Text="{f:CommonBinding A, ConverterName=Upper, ConverterPath=A}" />
+    <Label x:Name="Fine" Text="{f:CommonBinding A}" />
+  </VerticalStackLayout>
+</ContentView>

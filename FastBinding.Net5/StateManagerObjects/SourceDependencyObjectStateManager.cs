@@ -1,11 +1,12 @@
-﻿using System;
+﻿using FastBindings.Diagnostics;
+using System;
 using System.ComponentModel;
 using System.Windows;
 using FastBindings.Helpers;
 
 namespace FastBindings.StateManagerObjects
 {
-    internal class SourceDependencyObjectStateManager : ISourceStateManager
+    internal class SourceDependencyObjectStateManager : ISourceStateManager, IListenable
     {
         private readonly WeakReference _sourceObjectRef;
         private readonly WeakReference _sourcePropertyRef;
@@ -14,6 +15,8 @@ namespace FastBindings.StateManagerObjects
         private bool _isSubscribed;
         private bool _updatingDependObj = false;
         private Lazy<PropertyInfoResult> _lazyPropertyInfoResult;
+
+        public void Listen(object target, Action<object, object, object?> open) => _propertyUpdatedPublisher.Listen(target, open);
 
         public event EventHandler<object> PropertyUpdated
         {
@@ -28,6 +31,9 @@ namespace FastBindings.StateManagerObjects
             _lazyPropertyInfoResult = new Lazy<PropertyInfoResult>(GetPropertyInfo, false);
             _optional = optional;
         }
+
+        /// <summary>The binding this source belongs to (null while no logger is set).</summary>
+        internal BindingDescription? Description { get; set; }
 
         private PropertyInfoResult GetPropertyInfo()
         {
@@ -59,7 +65,7 @@ namespace FastBindings.StateManagerObjects
                 var result = source.GetValue(property!);
                 return string.IsNullOrEmpty(_optional) ||
                       CommonViewModelTreeHelper.TryCalculateValue(_optional, ref result) ? result : null;
-            }, isWrapException, StateManagerFactory.ErrorMessage);
+            }, isWrapException, StateManagerFactory.ErrorMessage, binding: Description);
         }
 
         public void SetSourceProperty(object? value)
@@ -72,8 +78,12 @@ namespace FastBindings.StateManagerObjects
             var source = _sourceObjectRef.Target as DependencyObject;
             var property = _sourcePropertyRef.Target as DependencyProperty;
 
-            if (source == null || property == null || !ReflectionUtility.IsValidType(value, property.PropertyType))
+            if (source == null || property == null)
+                return;
+            if (!ReflectionUtility.IsValidType(value, property.PropertyType))
             {
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.WriteBackTypeMismatch, detail: $"{source.GetType().Name}.{property.Name} is {property.PropertyType.Name}, the value is {value?.GetType().Name ?? "null"}",
+                    target: source, value: value, binding: Description);
                 return;
             }
 
@@ -93,7 +103,7 @@ namespace FastBindings.StateManagerObjects
                 {
                     _updatingDependObj = false;
                 }
-            }, true, StateManagerFactory.ErrorMessage);
+            }, true, $"writing back to {source.GetType().Name}.{property.Name}", BindingIssueKind.SetterThrew, Description);
         }
 
         public void Subscribe(object? dataContext)
@@ -128,12 +138,13 @@ namespace FastBindings.StateManagerObjects
             var property = _sourcePropertyRef.Target as DependencyProperty;
             if (source != null && property != null)
             {
+                using var scope = BindingLog.Enter(Description, source);
                 var ans = ExceptionUtility.Handle(() =>
                 {
                     var result = source.GetValue(property!);
                     return string.IsNullOrEmpty(_optional) ||
                           CommonViewModelTreeHelper.TryCalculateValue(_optional, ref result) ? result : null;
-                }, true, StateManagerFactory.ErrorMessage);
+                }, true, StateManagerFactory.ErrorMessage, binding: Description);
                 _propertyUpdatedPublisher.RaiseEvent(this, ans);
             }
         }

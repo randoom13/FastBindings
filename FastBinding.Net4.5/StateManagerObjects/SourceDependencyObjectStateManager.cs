@@ -1,34 +1,39 @@
-﻿using System;
+﻿using FastBindings.Diagnostics;
+using System;
 using System.ComponentModel;
 using System.Windows;
 using FastBindings.Helpers;
 
 namespace FastBindings.StateManagerObjects
 {
-    internal class SourceDependencyObjectStateManager : ISourceStateManager
+    internal class SourceDependencyObjectStateManager : ISourceStateManager, IListenable
     {
         private readonly WeakReference _sourceObjectRef;
         private readonly WeakReference _sourcePropertyRef;
-        private readonly string _optionalPath;
+        private readonly string? _optional;
         private readonly WeakEventPublisher<object> _propertyUpdatedPublisher = new WeakEventPublisher<object>();
         private bool _isSubscribed;
-
         private bool _updatingDependObj = false;
         private Lazy<PropertyInfoResult> _lazyPropertyInfoResult;
 
-        public event EventHandlerEx<object> PropertyUpdated
+        public void Listen(object target, Action<object, object, object?> open) => _propertyUpdatedPublisher.Listen(target, open);
+
+        public event EventHandler<object> PropertyUpdated
         {
             add { _propertyUpdatedPublisher.Subscribe(value); }
             remove { _propertyUpdatedPublisher.Unsubscribe(value); }
         }
 
-        public SourceDependencyObjectStateManager(DependencyProperty sourceProperty, DependencyObject targetObject, string optional)
+        public SourceDependencyObjectStateManager(DependencyProperty sourceProperty, DependencyObject targetObject, string? optional)
         {
             _sourcePropertyRef = new WeakReference(sourceProperty);
             _sourceObjectRef = new WeakReference(targetObject);
             _lazyPropertyInfoResult = new Lazy<PropertyInfoResult>(GetPropertyInfo, false);
-            _optionalPath = optional;
+            _optional = optional;
         }
+
+        /// <summary>The binding this source belongs to (null while no logger is set).</summary>
+        internal BindingDescription? Description { get; set; }
 
         private PropertyInfoResult GetPropertyInfo()
         {
@@ -42,7 +47,7 @@ namespace FastBindings.StateManagerObjects
             return ReflectionUtility.BildPropertyInfo(source, property.Name);
         }
 
-        public object GetSourceProperty(object dataContext, bool isWrapException)
+        public object? GetSourceProperty(object? dataContext, bool isWrapException)
         {
             if (!_lazyPropertyInfoResult.Value.IsValid ||
                  !_lazyPropertyInfoResult.Value.HasGetter)
@@ -57,14 +62,13 @@ namespace FastBindings.StateManagerObjects
             }
             return ExceptionUtility.Handle(() =>
             {
-                var result = source.GetValue(property);
-                return string.IsNullOrEmpty(_optionalPath) ||
-                      CommonViewModelTreeHelper.TryCalculateValue(_optionalPath, ref result) ? result : null;
-            }, isWrapException, StateManagerFactory.ErrorMessage);
+                var result = source.GetValue(property!);
+                return string.IsNullOrEmpty(_optional) ||
+                      CommonViewModelTreeHelper.TryCalculateValue(_optional, ref result) ? result : null;
+            }, isWrapException, StateManagerFactory.ErrorMessage, binding: Description);
         }
 
-
-        public void SetSourceProperty(object value)
+        public void SetSourceProperty(object? value)
         {
             if (!_lazyPropertyInfoResult.Value.IsValid ||
                  !_lazyPropertyInfoResult.Value.HasGetter)
@@ -74,8 +78,12 @@ namespace FastBindings.StateManagerObjects
             var source = _sourceObjectRef.Target as DependencyObject;
             var property = _sourcePropertyRef.Target as DependencyProperty;
 
-            if (source == null || property == null || !ReflectionUtility.IsValidType(value, property.PropertyType))
+            if (source == null || property == null)
+                return;
+            if (!ReflectionUtility.IsValidType(value, property.PropertyType))
             {
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.WriteBackTypeMismatch, detail: $"{source.GetType().Name}.{property.Name} is {property.PropertyType.Name}, the value is {value?.GetType().Name ?? "null"}",
+                    target: source, value: value, binding: Description);
                 return;
             }
 
@@ -84,24 +92,24 @@ namespace FastBindings.StateManagerObjects
                 _updatingDependObj = true;
                 try
                 {
-                    if (string.IsNullOrEmpty(_optionalPath))
+                    if (string.IsNullOrEmpty(_optional))
                     {
-                        source.SetValue(property, value);
+                        source.SetValue(property!, value);
                         return true;
                     }
-                    return CommonViewModelTreeHelper.TrySetValue(_optionalPath, source.GetValue(property), value);
+                    return CommonViewModelTreeHelper.TrySetValue(_optional, source.GetValue(property!), value);
                 }
                 finally
                 {
                     _updatingDependObj = false;
                 }
-            }, true, StateManagerFactory.ErrorMessage);
+            }, true, $"writing back to {source.GetType().Name}.{property.Name}", BindingIssueKind.SetterThrew, Description);
         }
 
-        public void Subscribe(object dataContext)
+        public void Subscribe(object? dataContext)
         {
-            if (dataContext == null || _isSubscribed || !_lazyPropertyInfoResult.Value.IsValid
-                || !_lazyPropertyInfoResult.Value.HasGetter)
+            if (!_lazyPropertyInfoResult.Value.IsValid
+                || !_lazyPropertyInfoResult.Value.HasGetter || dataContext == null || _isSubscribed)
             {
                 return;
             }
@@ -111,16 +119,16 @@ namespace FastBindings.StateManagerObjects
             {
                 return;
             }
-            DependencyPropertyDescriptor.FromProperty(property, source.GetType())
-   .AddValueChanged(source, OnDependencyPropertyChanged);
             _isSubscribed = true;
+            DependencyPropertyDescriptor.FromProperty(property, source.GetType())
+     .AddValueChanged(source, OnDependencyPropertyChanged);
         }
 
         public void Unsubscribe()
         {
         }
 
-        private void OnDependencyPropertyChanged(object sender, EventArgs e)
+        private void OnDependencyPropertyChanged(object? sender, EventArgs e)
         {
             if (_updatingDependObj)
             {
@@ -128,18 +136,15 @@ namespace FastBindings.StateManagerObjects
             }
             var source = _sourceObjectRef.Target as DependencyObject;
             var property = _sourcePropertyRef.Target as DependencyProperty;
-            if (source == null || property == null)
-            {
-                return;
-            }
             if (source != null && property != null)
             {
+                using var scope = BindingLog.Enter(Description, source);
                 var ans = ExceptionUtility.Handle(() =>
                 {
-                    var result = source.GetValue(property);
-                    return string.IsNullOrEmpty(_optionalPath) ||
-                          CommonViewModelTreeHelper.TryCalculateValue(_optionalPath, ref result) ? result : null;
-                }, true, StateManagerFactory.ErrorMessage);
+                    var result = source.GetValue(property!);
+                    return string.IsNullOrEmpty(_optional) ||
+                          CommonViewModelTreeHelper.TryCalculateValue(_optional, ref result) ? result : null;
+                }, true, StateManagerFactory.ErrorMessage, binding: Description);
                 _propertyUpdatedPublisher.RaiseEvent(this, ans);
             }
         }

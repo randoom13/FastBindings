@@ -28,21 +28,21 @@ namespace FastBindings
         }
 
         [DefaultValue(null)]
-        public string NotificationPath
+        public string? NotificationPath
         {
             get => _updateManager.NotificationPath;
             set => _updateManager.NotificationPath = value;
         }
 
         [DefaultValue(null)]
-        public string NotificationName
+        public string? NotificationName
         {
             get => _updateManager.NotificationName;
             set => _updateManager.NotificationName = value;
         }
 
         [DefaultValue(null)]
-        public INotificationFilter Notification
+        public INotificationFilter? Notification
         {
             get => _updateManager.Notification;
             set => _updateManager.Notification = value;
@@ -55,42 +55,42 @@ namespace FastBindings
         }
 
         [DefaultValue(null)]
-        public string DataContextSource
+        public string? DataContextSource
         {
             get => _updateManager.DataContextSource;
             set => _updateManager.DataContextSource = value;
         }
 
         [DefaultValue(null)]
-        public string ConverterPath
+        public string? ConverterPath
         {
             get => _updateManager.ConverterPath;
             set => _updateManager.ConverterPath = value;
         }
 
         [DefaultValue(null)]
-        public string ConverterName
+        public string? ConverterName
         {
             get => _updateManager.ConverterName;
             set => _updateManager.ConverterName = value;
         }
 
         [DefaultValue(null)]
-        public object TargetNullValue
+        public object? TargetNullValue
         {
             get => _updateManager.TargetNullValue;
             set => _updateManager.TargetNullValue = value;
         }
 
         [DefaultValue(null)]
-        public object FallbackValue
+        public object? FallbackValue
         {
             get => _updateManager.FallBackValue;
             set => _updateManager.FallBackValue = value;
         }
 
         [DefaultValue(null)]
-        public IValueConverterBase Converter
+        public IValueConverterBase? Converter
         {
             get => _updateManager.Converter;
             set => _updateManager.Converter = value;
@@ -99,22 +99,23 @@ namespace FastBindings
         [DefaultValue(CacheStrategy.None)]
         public CacheStrategy CacheStrategy { get; set; }
 
-        public override object ProvideValue(IServiceProvider serviceProvider)
+        public override object? ProvideValue(IServiceProvider serviceProvider)
         {
             return this;
         }
 
         internal override void Initialize(DependencyObject element)
         {
-            VisualTreeHelperEx.SubscribeLoaded(element, OnTargetLoaded);
+            _updateManager.Description = Diagnostics.BindingDescriptions.For(this, element.GetType().Name, "Target=" + Target, null);
+            VisualTreeHelperEx.SubscribeOnLoaded(element, OnTargetLoaded);
         }
 
-        private void OnTargetLoaded(object sender, EventArgs args)
+        private void OnTargetLoaded(object? sender, EventArgs? args)
         {
             var element = sender as DependencyObject;
-            if (VisualTreeHelperEx.UnSubscribeLoaded(element, OnTargetLoaded))
+            if (VisualTreeHelperEx.UnSubscribeOnLoaded(element, OnTargetLoaded))
             {
-                _updateManager.Initialize(element, CacheStrategy);
+                _updateManager.Initialize(element!, CacheStrategy);
             }
         }
     }

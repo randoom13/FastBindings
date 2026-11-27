@@ -21,6 +21,12 @@
     <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
     <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="11.1.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.1" />
-    <PackageReference Include="FastBindings" Version="1.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- FastBindings from this repository's FastBinding.Avalonia project, with every change since 1.1.3. Once the next
+         FastBindings package is on nuget.org, use it instead: -p:FastBindingsVersion=1.1.4, or set the property here. -->
+    <ProjectReference Include="..\FastBinding.Avalonia\FastBinding.Avalonia.csproj" Condition="'$(FastBindingsVersion)' == ''" />
+    <PackageReference Include="FastBindings" Version="$(FastBindingsVersion)" Condition="'$(FastBindingsVersion)' != ''" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
-﻿using FastBindings.Helpers;
+﻿using FastBindings.Diagnostics;
+using FastBindings.Helpers;
 using FastBindings.Interfaces;
 using FastBindings.StateManagerObjects;
 
@@ -25,6 +26,11 @@ namespace FastBindings.BindingManagers
             set { _targetInfo.Target = value; }
         }
         public string Sources { get; set; } = string.Empty;
+
+        /// <summary>What this binding reports its problems as (null while no logger is set).</summary>
+        internal BindingDescription? Description { get; set; }
+
+        private string ConverterDetail() => $"converter {(_convertersProxy.Converter?.GetType().Name ?? _convertersProxy.ConverterPath ?? "")}{(_convertersProxy.ConverterName != null ? " '" + _convertersProxy.ConverterName + "'" : "")}";
 
         public string? NotificationPath
         {
@@ -78,10 +84,11 @@ namespace FastBindings.BindingManagers
         public void Initialize(VisualElement targetObject, CacheStrategy cacheStrategy)
         {
             _targetObjectRef.Target = targetObject;
-            _sourceStateManagers = StateManagerFactory.Build(Sources, targetObject, _dataContextParams, cacheStrategy, _treeHelper);
+            using var scope = BindingLog.Enter(Description, targetObject);
+            _sourceStateManagers = StateManagerFactory.Build(Sources, targetObject, _dataContextParams, cacheStrategy, _treeHelper, Description);
             if (!_sourceStateManagers.Any())
             {
-                System.Diagnostics.Debug.Write("[FastBinding] Could not create managers");
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.SourcesInvalid, detail: "no source in '" + Sources + "'", target: targetObject, binding: Description);
                 return;
             }
 
@@ -94,7 +101,7 @@ namespace FastBindings.BindingManagers
 
             foreach (var stateManager in _sourceStateManagers)
             {
-                stateManager.PropertyUpdated += OnViewModelValueUpdated;
+                stateManager.ListenTo(this, Updated, OnViewModelValueUpdated);
                 stateManager.Subscribe(dataContext);
             }
 
@@ -120,10 +127,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred on binding to {initialTarget} on " +
-                        $"converter {_convertersProxy.ConverterName ?? "None"} during intialization");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ForwardConverterThrew, ex, ConverterDetail(), initialTarget, dataContextType: dataContext?.GetType(), binding: Description);
                     value = new ExceptionHolder(ex);
                 }
             }
@@ -140,6 +144,9 @@ namespace FastBindings.BindingManagers
             return FallBackValue ?? val;
         }
 
+        // the listener for the source state managers, made once for every binding (see WeakEventPublisher.Listen)
+        private static readonly Action<object, object, object?> Updated = (manager, sender, value) => ((OneWayBindingUpdateManager<T>)manager).OnViewModelValueUpdated(sender, value!);
+
         private void OnViewModelValueUpdated(object? sender, object value)
         {
             var target = _targetObjectRef.Target as BindableObject;
@@ -150,6 +157,7 @@ namespace FastBindings.BindingManagers
             var dispatcher = target.Dispatcher;
             if (!dispatcher.IsDispatchRequired)
             {
+                using var scope = BindingLog.Enter(Description, target);
                 OnViewModelValueUpdated(target, sender, value);
             }
             else
@@ -185,9 +193,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to prepare data for update {target}");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ForwardConverterThrew, ex, ConverterDetail(), target, dataContextType: dataContext?.GetType(), binding: Description);
                     value = new ExceptionHolder(ex);
                 }
             }
@@ -205,9 +211,7 @@ namespace FastBindings.BindingManagers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to update {target}");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.NotificationFilterThrew, ex, "notification " + (_notificationProxy.NotificationName ?? ""), target, value, dataContext?.GetType(), Description);
             }
         }
 
@@ -219,6 +223,7 @@ namespace FastBindings.BindingManagers
             {
                 return;
             }
+            using var scope = BindingLog.Enter(Description, target);
 
             var dataContextTarget = _dataContextParams.GetDataContextTarget(target);
             foreach (var manager in _sourceStateManagers)
@@ -265,9 +270,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to calculate value in converter for {target}");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ForwardConverterThrew, ex, ConverterDetail(), target, dataContextType: newValue?.GetType(), binding: Description);
                     value = new ExceptionHolder(ex);
                 }
             }
@@ -282,10 +285,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to update for {target}");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
-                    value = new ExceptionHolder(ex);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.NotificationFilterThrew, ex, "notification " + (_notificationProxy.NotificationName ?? ""), target, value, newValue?.GetType(), Description);
                 }
             }
 
@@ -297,6 +297,7 @@ namespace FastBindings.BindingManagers
         private void UpdateTarget(BindableObject target, object? value)
         {
             _updatingTarget = true;
+            var stage = BindingIssueKind.MethodTargetThrew;   // what the catch reports: the observer, the view-model's setter or method, the control
             try
             {
                 if (!_targetInfo.IsIniailized)
@@ -313,8 +314,7 @@ namespace FastBindings.BindingManagers
                         if (getterType == null || !ReflectionUtility.ContainsInterface(getterType,
                             new[] { typeof(IObserver<>), typeof(ISubscriber<>) }) || obj1 == null)
                         {
-                            System.Diagnostics.Debug.Write($"[FastBinding] Could not find target observer {getterType?.ToString() ?? "none"} from" +
-                                $"{_targetInfo.ObserverTarget}");
+                            if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.PathNotFound, detail: $"Target '{_targetInfo.ObserverTarget}' is no IObserver<T> or ISubscriber<T> (its type: {getterType?.Name ?? "none"})", target: target, value: value, binding: Description);
                             return;
                         }
                         if (_targetInfo.Proxy == null || !ReferenceEquals(_targetInfo.Proxy?.Target, obj1))
@@ -334,6 +334,7 @@ namespace FastBindings.BindingManagers
 
                 if (!_targetInfo.IsDependencyObject)
                 {
+                    stage = Target.Contains("(") ? BindingIssueKind.MethodTargetThrew : BindingIssueKind.SetterThrew;
                     var initialAccessor = _dataContextParams.GetDataContext(_dataContextParams.GetDataContextTarget(target));
                     _treeHelper.SetViewModelProperty(Target, initialAccessor, value);
                     return;
@@ -341,27 +342,22 @@ namespace FastBindings.BindingManagers
 
                 var obj = _targetInfo.TargetObj;
                 var property = _targetInfo.TargetObjProperty;
-                if (obj != null && property != null)
+                if (obj == null)
                 {
-                    obj.SetValue(property, value);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.AncestorNotFound, detail: $"no control in Target '{Target}'", target: target, value: value, binding: Description);
+                    return;
                 }
-                else
+                else if (property == null)
                 {
-                    if (obj == null)
-                    {
-                        System.Diagnostics.Debug.Write($"[FastBinding] Could not find target from {Target}");
-                    }
-                    else if (property == null)
-                    {
-                        System.Diagnostics.Debug.Write($"[FastBinding] Could not find target property from {Target}");
-                    }
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.PathNotFound, detail: $"no property in Target '{Target}'", target: target, value: value, binding: Description);
+                    return;
                 }
+                stage = BindingIssueKind.TargetRefusedValue;
+                obj.SetValue(property, value);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to target {Target}");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (BindingLog.IsOn) BindingLog.Report(stage, ex, $"Target '{Target}'", target, value, binding: Description);
             }
             finally
             {

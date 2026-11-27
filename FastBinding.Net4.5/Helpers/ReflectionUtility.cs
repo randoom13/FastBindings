@@ -1,5 +1,4 @@
-﻿
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
@@ -9,43 +8,23 @@ namespace FastBindings.Helpers
 {
     internal static class ReflectionUtility
     {
-        private static string GetCallerMethodInfo()
-        {
-            // Get the call stack
-            var stackTrace = new StackTrace();
-
-            // Get the method that called the current method (index 2 is the calling method)
-            var callingMethod = stackTrace.GetFrame(2)?.GetMethod();
-            if (callingMethod != null)
-            {
-                if (callingMethod.DeclaringType != null)
-                    return $"{callingMethod.Name}-{callingMethod.DeclaringType.Name}";
-
-                else return callingMethod.Name;
-            }
-            return "Unknown";
-        }
-
-        public static bool IsValidType(object value, Type expectingType)
+        public static bool IsValidType(object? value, Type? expectingType)
         {
             bool result;
             if (value == null)
             {
-                // check on nullable type
-                result = expectingType == null || (expectingType.IsClass || Nullable.GetUnderlyingType(expectingType) != null);
+                // null fits any type but a non-nullable value type. It was "IsClass", which an interface is not: null was refused for
+                // ItemsSource (IEnumerable), Command (ICommand) and every other interface-typed property, so a list or command whose
+                // source became null — or whose DataContext went away — kept its old value (and a list kept its rows, subscribed).
+                result = expectingType == null || !expectingType.IsValueType || Nullable.GetUnderlyingType(expectingType) != null;
             }
             else
             {
                 var type = value.GetType();
                 result = type == expectingType || expectingType?.IsAssignableFrom(type) == true;
             }
-            if (!result)
-            {
-                Debug.Write($"[FastBinding][{GetCallerMethodInfo()}] Expect type:{value?.GetType()?.ToString() ?? "None"} Actual type:{expectingType?.ToString() ?? "None"}");
-            }
-            return result;
+            return result;   // a mismatch is reported by the caller, which knows what it means there
         }
-
 
         public static bool ContainsInterface(Type type, params Type[] genericInterfaces)
         {
@@ -53,24 +32,22 @@ namespace FastBindings.Helpers
             return typeInterfaces.Any(i => i.IsGenericType && (genericInterfaces.Contains(i.GetGenericTypeDefinition())));
         }
 
-        public static DependencyProperty FindDependencyPropertyByName(DependencyObject obj, string propertyName)
+        public static DependencyProperty? FindDependencyPropertyByName(DependencyObject obj, string? propertyName)
         {
-            if (obj == null) 
+            if (obj == null)
                 throw new ArgumentException(nameof(obj));
 
-            if (string.IsNullOrEmpty(propertyName)) 
+            if (string.IsNullOrEmpty(propertyName))
                 throw new ArgumentException(nameof(propertyName));
 
-           Type type = obj.GetType();
-           var field = type.GetProperty(propertyName);
-            var properties = type.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.FlattenHierarchy)
-                .Where(it =>it.Name == $"{propertyName}Property").ToList();
-            var t = type.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.FlattenHierarchy)
-                .Where(it => it.Name == propertyName).Select(it => it.GetValue(null) as DependencyProperty);
-            return properties?.SingleOrDefault()?.GetValue(obj) as DependencyProperty;
+            Type type = obj.GetType();
+            var fields =
+                 type.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.FlattenHierarchy)
+                 .Where(it => it.FieldType == typeof(DependencyProperty) && it.Name == $"{propertyName}Property");
+            return fields?.SingleOrDefault()?.GetValue(null) as DependencyProperty;
         }
 
-        public static EventInfo FindEventByName(DependencyObject obj, string eventName)
+        public static EventInfo? FindEventByName(DependencyObject? obj, string? eventName)
         {
             if (obj == null)
                 throw new ArgumentException(nameof(obj));
@@ -88,20 +65,18 @@ namespace FastBindings.Helpers
         {
             try
             {
-                if (obj == null) 
+                if (obj == null)
                     throw new ArgumentException(nameof(obj));
 
-                if (string.IsNullOrEmpty(propertyName)) 
+                if (string.IsNullOrEmpty(propertyName))
                     throw new ArgumentException(nameof(propertyName));
 
-                PropertyInfo fieldInfo = obj.GetType().GetProperty(propertyName);
+                var fieldInfo = obj?.GetType()?.GetProperty(propertyName);
                 return new PropertyInfoResult(fieldInfo);
             }
-            catch (Exception ex) 
+            catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[FastBinding] Failed to BildPropertyInfo");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.PathNotFound, ex, $"'{propertyName}' on {obj?.GetType().Name ?? "null"}");
                 return new PropertyInfoResult();
             }
         }

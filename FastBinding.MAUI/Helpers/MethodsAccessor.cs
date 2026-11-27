@@ -1,4 +1,6 @@
-﻿namespace FastBindings.Helpers
+﻿using System.Collections.Concurrent;
+
+namespace FastBindings.Helpers
 {
     internal class MethodsAccessor
     {
@@ -12,7 +14,8 @@
             TargetType = targetType;
         }
 
-        private readonly Dictionary<string, Action<object, object?>> _methodActionByNames = new Dictionary<string, Action<object, object?>>();
+        // Read and filled from any thread a binding runs on.
+        private readonly ConcurrentDictionary<string, Action<object, object?>> _methodActionByNames = new ConcurrentDictionary<string, Action<object, object?>>(StringComparer.Ordinal);
         private void Verify(object target, string propertyName)
         {
             if (string.IsNullOrEmpty(propertyName))
@@ -37,19 +40,16 @@
             {
                 methodAction = ExpressionTreeHelper.CreateMethodAction(TargetType, actionMethodName);
                 if (methodAction == null)
+                {
+                    if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.PathNotFound, detail: $"no method {actionMethodName} of one parameter on {TargetType.Name}", value: value);
                     return;
+                }
 
-                _methodActionByNames[actionMethodName] = methodAction;
+                methodAction = _methodActionByNames.GetOrAdd(actionMethodName, methodAction);
             }
-            try
-            {
-                methodAction(target, value);
-            }
-            catch (Exception)
-            {
-                System.Diagnostics.Debug.Write($"[FastBinding] It looks like the method {actionMethodName} requires a different incoming parameter type.");
-                throw;
-            }
+            // what it throws — its own exception, or an InvalidCastException for a value of another type than its parameter's — is
+            // reported where the binding catches it (MethodTargetThrew)
+            methodAction(target, value);
         }
     }
 

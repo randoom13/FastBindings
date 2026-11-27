@@ -103,6 +103,19 @@ namespace FastBindings
 
         public override object? ProvideValue(IServiceProvider serviceProvider)
         {
+            var timing = FastBindingsDiagnostics.Begin();
+            try
+            {
+                return ProvideValueCore(serviceProvider);
+            }
+            finally
+            {
+                FastBindingsDiagnostics.End(ref FastBindingsDiagnostics._provideValueTicks, timing);
+            }
+        }
+
+        private object? ProvideValueCore(IServiceProvider serviceProvider)
+        {
             if (string.IsNullOrEmpty(Sources))
                 return DependencyProperty.UnsetValue;
 
@@ -115,6 +128,7 @@ namespace FastBindings
 
             if (targetObject == null)
                 return DependencyProperty.UnsetValue;
+            _updateManager.Description = Diagnostics.BindingDescriptions.For(this, targetObject.GetType().Name, targetProperty.Name, serviceProvider);
 
             if (_updateManager.CanSubscribeOnDataContext(targetObject))
             {
@@ -127,7 +141,15 @@ namespace FastBindings
         internal override void LazyInitialization(DependencyObject targetObject, DependencyProperty targetProperty,
     DependencyObject? dataContextObj)
         {
-            _updateManager.InitializeAndRefresh(targetObject, targetProperty, CacheStrategy, dataContextObj);
+            var timing = FastBindingsDiagnostics.Begin();
+            try
+            {
+                _updateManager.InitializeAndRefresh(targetObject, targetProperty, CacheStrategy, dataContextObj);
+            }
+            finally
+            {
+                FastBindingsDiagnostics.End(ref FastBindingsDiagnostics._lateStartTicks, timing);
+            }
         }
     }
 }

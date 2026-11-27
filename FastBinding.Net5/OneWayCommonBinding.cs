@@ -106,6 +106,7 @@ namespace FastBindings
 
         internal override void Initialize(DependencyObject element)
         {
+            _updateManager.Description = Diagnostics.BindingDescriptions.For(this, element.GetType().Name, "Target=" + Target, null);
             VisualTreeHelperEx.SubscribeOnLoaded(element, OnTargetLoaded);
         }
 

@@ -20,7 +20,10 @@ namespace FastBindings.StateManagerObjects
                 return AnchorObject ?? target;
             }
 
-            return PropertyPathParser.CalculateSource(AnchorObject ?? target, DataContextSource);
+            var source = PropertyPathParser.CalculateSource(AnchorObject ?? target, DataContextSource);
+            // no BindingContext from it: the binding reads nothing (as before), and says so
+            if (source == null && Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.AncestorNotFound, detail: $"DataContextSource '{DataContextSource}' from {target.GetType().Name}", target: target);
+            return source;
         }
 
         public object? GetDataContext(BindableObject? target)

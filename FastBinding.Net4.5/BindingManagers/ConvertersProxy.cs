@@ -1,7 +1,7 @@
-﻿using System;
-using System.Threading.Tasks;
+﻿using FastBindings.Helpers;
 using FastBindings.Interfaces;
-using FastBindings.Helpers;
+using System;
+using System.Threading.Tasks;
 
 namespace FastBindings.BindingManagers
 {
@@ -13,36 +13,44 @@ namespace FastBindings.BindingManagers
         }
         private readonly IViewModelTreeHelper<T> _treeHelper;
 
-        public string ConverterPath { get; set; }
-        public string ConverterName { get; set; }
+        public string? ConverterPath { get; set; }
+        public string? ConverterName { get; set; }
 
-        public IValueConverterBase Converter { get; set; }
+        public IValueConverterBase? Converter { get; set; }
 
-        private TConverter CalculateConverter<TConverter>(object dataContext)
+        private TConverter? CalculateConverter<TConverter>(object? dataContext)
     where TConverter : IValueConverterBase
         {
-            if (string.IsNullOrEmpty(ConverterName))
+            if (dataContext == null || string.IsNullOrEmpty(ConverterName))
                 return default;
 
             if (string.IsNullOrEmpty(ConverterPath))
+            {
+                if (!(dataContext is IValueConverterBase))
+                    if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.PathNotFound,
+                        detail: $"ConverterName '{ConverterName}' without ConverterPath or Converter: the DataContext ({dataContext.GetType().Name}) is no converter");
                 return dataContext is TConverter ? (TConverter)dataContext : default;
+            }
 
             var result = _treeHelper.GetFinalViewModel(dataContext, ConverterPath);
+            if (!(result is IValueConverterBase))   // nothing at ConverterPath converts (one direction missing is no problem)
+                if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.PathNotFound,
+                    detail: $"ConverterPath '{ConverterPath}' on {dataContext.GetType().Name} is {(result == null ? "null" : result.GetType().Name + ", no converter")}");
             return result is TConverter ? (TConverter)result : default;
         }
 
-        internal Func<ConverterArgs, object> FindForwardConverter(object dataContext)
+        internal Func<ConverterArgs, object>? FindForwardConverter(object? dataContext)
         {
             var converter = Converter != null ?
                 Converter as IForwardValueConverter : CalculateConverter<IForwardValueConverter>(dataContext);
-            
+
             if (converter != null)
                 return args => converter.Convert(ConverterName, args);
-            
+
             return null;
         }
 
-        internal Func<ConverterBackArgs, object[]> FindBackConverter(object dataContext)
+        internal Func<ConverterBackArgs, object?[]>? FindBackConverter(object? dataContext)
         {
             var converter = Converter != null ?
                Converter as IBackValueConverter : CalculateConverter<IBackValueConverter>(dataContext);
@@ -53,13 +61,13 @@ namespace FastBindings.BindingManagers
             return null;
         }
 
-        internal Func<ConverterArgs, Task<object>> FindAsyncForwardConverter(object dataContext)
+        internal Func<ConverterArgs, Task<object>>? FindAsyncForwardConverter(object? dataContext)
         {
             var converter = Converter != null ?
                 Converter as IAsyncForwardValueConverter : CalculateConverter<IAsyncForwardValueConverter>(dataContext);
 
             if (converter != null)
-                return args => converter.AsyncConvert(ConverterName, args);
+                return args => converter.ConvertAsync(ConverterName, args);
 
             return null;
         }

@@ -1,0 +1,114 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Avalonia (headless) and MAUI (the platform-free net8.0 target) run anywhere
+  avalonia-maui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test FastBinding.Avalonia.Tests -c Release
+      - run: dotnet test FastBinding.MAUI.Tests -c Release -p:MauiCoreOnly=true
+      - name: the Avalonia and WPF examples, built against this repository's FastBinding.Avalonia and FastBinding.Net5
+        run: |
+          dotnet build AvaloniaExample -c Release
+          dotnet build WpfExample -c Release
+
+  # WPF needs Windows
+  maui-example:
+    # MauiExample built against this repository's FastBinding.MAUI (the .NET 8 SDK: newer ones refuse MAUI 8's targets)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        id: dotnet
+        with:
+          dotnet-version: 8.0.x
+      - shell: bash
+        run: dotnet new globaljson --sdk-version "${{ steps.dotnet.outputs.dotnet-version }}" --force
+      - run: dotnet workload install maui
+      - name: build MauiExample (Windows and Android)
+        shell: bash
+        run: |
+          dotnet build MauiExample -c Release -f net8.0-windows10.0.19041.0
+          dotnet build MauiExample -c Release -f net8.0-android
+
+  wpf:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test FastBinding.Net5.Tests -c Release --logger "console;verbosity=normal"
+      - run: dotnet test FastBinding.Net4.5.Tests -c Release --logger "console;verbosity=normal"
+
+  # the same WPF tests against FastBindings.WPF_50 1.1.3 as published (c0f53c7): which fail shows what each test catches
+  wpf-1-1-3:
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: 1.1.3's FastBinding.Net5
+        shell: bash
+        run: |
+          git rm -rq FastBinding.Net5 && git checkout c0f53c7 -- FastBinding.Net5
+          rm FastBinding.Net5.Tests/DiagnosticsTests.cs   # FastBindingsDiagnostics is not in 1.1.3
+      - run: dotnet test FastBinding.Net5.Tests -c Release --logger "console;verbosity=normal" --blame-hang-timeout 2m
+
+  # the .NET Framework 4.5 tests against FastBindings.WPF_45 1.1.3's sources (c0f53c7), built by this branch's SDK-style project
+  wpf-net45-1-1-3:
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: 1.1.3's FastBinding.Net4.5 sources
+        shell: bash
+        run: |
+          cp FastBinding.Net4.5/FastBinding.Net4.5.csproj /tmp/net45.csproj
+          git rm -rq FastBinding.Net4.5 && git checkout c0f53c7 -- FastBinding.Net4.5
+          cp /tmp/net45.csproj FastBinding.Net4.5/FastBinding.Net4.5.csproj
+          cd FastBinding.Net4.5.Tests
+          rm DiagnosticsTests.cs Views/AsyncTwoWayCombo.xaml Views/AsyncTwoWayCombo.xaml.cs   # not in 1.1.3 (no AsyncCommonBinding for 4.5)
+          sed -i 's/async ? new AsyncTwoWayCombo() : //' BugTests.cs
+      - run: dotnet test FastBinding.Net4.5.Tests -c Release --logger "console;verbosity=normal" --blame-hang-timeout 2m
+
+  # timings, not a pass/fail check: WPF's classic {Binding} and CommonBinding, this branch and 1.1.3
+  wpf-benchmark:
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet build FastBinding.Net5.Benchmark -c Release
+      - name: this branch
+        run: dotnet FastBinding.Net5.Benchmark/bin/Release/net8.0-windows/FastBinding.Net5.Benchmark.dll
+        env:
+          LABEL: this branch
+      - name: 1.1.3's FastBinding.Net5
+        shell: bash
+        run: |
+          git rm -rq FastBinding.Net5 && git checkout c0f53c7 -- FastBinding.Net5
+          dotnet build FastBinding.Net5.Benchmark -c Release
+          LABEL=1.1.3 ONLY=Fast ROUNDS=5 dotnet FastBinding.Net5.Benchmark/bin/Release/net8.0-windows/FastBinding.Net5.Benchmark.dll

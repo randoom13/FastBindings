@@ -1,0 +1,99 @@
+name: release
+
+# Makes the next version of the four FastBindings packages (FastBindings, FastBindings.MAUI, FastBindings.WPF_50 and
+# FastBindings.WPF_45), all with one version: the highest stable version on nuget.org (or tag vX.Y.Z)
+# bumped by the part chosen. Builds and tests everything, packs, checks what each package holds, and keeps the packages as
+# the run's artifact. With "publish" ticked it also tags the commit vX.Y.Z, makes a GitHub release with the packages and,
+# when the repository has a NUGET_API_KEY secret, pushes them to nuget.org.
+#
+# Run it from the Actions tab (Run workflow) on the default branch. A push that changes this file, its scripts or a project or nuspec file runs it as a dry run
+# (patch, nothing published), so the workflow can be tried on a branch.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: which part of the version to raise
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      publish:
+        description: tag, make a GitHub release and push to nuget.org (else only build, test and pack)
+        type: boolean
+        default: false
+  push:
+    paths: [".github/workflows/release.yml", "scripts/pack.sh", "scripts/check-packages.py", "scripts/next-version.py",
+            "FastBinding.*/*.csproj", "FastBinding.*/*.nuspec"]
+
+permissions:
+  contents: write   # the tag and the release
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      PUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the tags
+      - uses: actions/setup-dotnet@v4
+        id: dotnet
+        with:
+          dotnet-version: 8.0.x
+      - name: build with the .NET 8 SDK
+        # The runner's default SDK is newer and refuses FastBindings.MAUI's net8.0-android/-ios/-maccatalyst targets
+        # (NETSDK1202: MAUI 8 is out of support); the SDK they were made for still builds them.
+        shell: bash
+        run: dotnet new globaljson --sdk-version "${{ steps.dotnet.outputs.dotnet-version }}" --force && dotnet --version
+      - name: next version
+        id: version
+        shell: bash
+        run: |
+          version=$(python scripts/next-version.py "${{ inputs.bump || 'patch' }}")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "### FastBindings $version" >> "$GITHUB_STEP_SUMMARY"
+          echo "next version: $version (publish: $PUBLISH)"
+      - name: MAUI workload (Android, iOS, Mac Catalyst and Windows targets of FastBindings.MAUI)
+        run: dotnet workload install maui
+      - name: tests
+        shell: bash
+        run: |
+          dotnet test FastBinding.Avalonia.Tests -c Release
+          dotnet test FastBinding.MAUI.Tests -c Release -p:MauiCoreOnly=true
+          dotnet test FastBinding.Net5.Tests -c Release --blame-hang-timeout 2m
+          dotnet test FastBinding.Net4.5.Tests -c Release --blame-hang-timeout 2m
+      - name: pack
+        shell: bash
+        run: scripts/pack.sh "${{ steps.version.outputs.version }}" artifacts/packages
+      - name: check the packages
+        shell: bash
+        run: python scripts/check-packages.py artifacts/packages "${{ steps.version.outputs.version }}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ steps.version.outputs.version }}
+          path: artifacts/packages/*nupkg
+      - name: tag and GitHub release
+        if: env.PUBLISH == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${{ steps.version.outputs.version }}
+          git tag "v$version"
+          git push origin "v$version"
+          gh release create "v$version" artifacts/packages/*nupkg --title "FastBindings $version" --generate-notes
+      - name: push to nuget.org
+        if: env.PUBLISH == 'true'
+        shell: bash
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "no NUGET_API_KEY secret: the packages are on the GitHub release only" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          dotnet nuget push "artifacts/packages/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate

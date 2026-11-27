@@ -21,17 +21,17 @@ namespace FastBindings
         protected void PrepareInitialization(DependencyObject targetObject, DependencyProperty targetProperty)
         {
             var topParent = targetObject;
-            RoutedEventHandler handler = null;
+            RoutedEventHandler? handler = null;
             handler = (sender, _) =>
             {
                 if (handler == null)
                     return;
 
-                VisualTreeHelperEx.UnSubscribeLoaded(topParent, handler);
+                VisualTreeHelperEx.UnSubscribeOnLoaded(topParent, handler);
                 handler = null;
-                OnLoaded(targetObject, targetProperty, null);
+                LazyInitialization(targetObject, targetProperty, null);
             };
-            if (!VisualTreeHelperEx.SubscribeLoaded(topParent, handler))
+            if (!VisualTreeHelperEx.SubscribeOnLoaded(topParent, handler))
                 handler = null;
         }
 
@@ -40,23 +40,23 @@ namespace FastBindings
         {
             var objectProvider = serviceProvider.GetService(typeof(IRootObjectProvider)) as IRootObjectProvider;
             var topParent = objectProvider?.RootObject as DependencyObject;
-            RoutedEventHandler handler = null;
+            RoutedEventHandler? handler = null;
             handler = (sender, _) =>
             {
                 if (handler == null)
                     return;
 
-                VisualTreeHelperEx.UnSubscribeLoaded(topParent, handler);
+                VisualTreeHelperEx.UnSubscribeOnLoaded(topParent, handler);
                 handler = null;
                 var dataContextParent = VisualTreeHelperEx.FindParentByValue(topParent, targetObject);
-                OnLoaded(targetObject, targetProperty, dataContextParent);
+                LazyInitialization(targetObject, targetProperty, dataContextParent);
             };
-            if (!VisualTreeHelperEx.SubscribeLoaded(topParent, handler))
+            if (!VisualTreeHelperEx.SubscribeOnLoaded(topParent, handler))
                 handler = null;
         }
 
-        internal abstract void OnLoaded(DependencyObject targetObject, DependencyProperty targetProperty,
-            DependencyObject dataContextObj);
+        internal abstract void LazyInitialization(DependencyObject targetObject, DependencyProperty targetProperty,
+            DependencyObject? dataContextObj);
 
     }
 

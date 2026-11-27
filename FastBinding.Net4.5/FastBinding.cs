@@ -11,24 +11,24 @@ namespace FastBindings
     public class FastBinding : BaseBinding
     {
         private readonly BindingUpdateManager<IPropertyAccessor> _updateManager
-    = new BindingUpdateManager<IPropertyAccessor>(new FastViewModelTreeHelper());
+           = new BindingUpdateManager<IPropertyAccessor>(new FastViewModelTreeHelper());
 
         [DefaultValue(null)]
-        public string NotificationPath
+        public string? NotificationPath
         {
             get => _updateManager.NotificationPath;
             set => _updateManager.NotificationPath = value;
         }
 
        [DefaultValue(null)]
-        public string NotificationName
+        public string? NotificationName
         {
             get => _updateManager.NotificationName;
             set => _updateManager.NotificationName = value;
         }
 
         [DefaultValue(null)]
-        public INotificationFilter Notification
+        public INotificationFilter? Notification
         {
             get => _updateManager.Notification;
             set => _updateManager.Notification = value;
@@ -41,21 +41,21 @@ namespace FastBindings
         }
 
         [DefaultValue(null)]
-        public string DataContextSource
+        public string? DataContextSource
         {
             get => _updateManager.DataContextSource;
             set => _updateManager.DataContextSource = value;
         }
 
         [DefaultValue(null)]
-        public string ConverterPath
+        public string? ConverterPath
         {
             get => _updateManager.ConverterPath;
             set => _updateManager.ConverterPath = value;
         }
 
         [DefaultValue(null)]
-        public string ConverterName
+        public string? ConverterName
         {
             get => _updateManager.ConverterName;
             set => _updateManager.ConverterName = value;
@@ -69,21 +69,20 @@ namespace FastBindings
         }
 
         [DefaultValue(null)]
-        public object TargetNullValue
+        public object? TargetNullValue
         {
             get => _updateManager.TargetNullValue;
             set => _updateManager.TargetNullValue = value;
         }
-
         [DefaultValue(null)]
-        public object FallBackValue
+        public object? FallBackValue
         {
             get => _updateManager.FallBackValue;
             set => _updateManager.FallBackValue = value;
         }
 
         [DefaultValue(null)]
-        public IValueConverterBase Converter
+        public IValueConverterBase? Converter
         {
             get => _updateManager.Converter;
             set => _updateManager.Converter = value;
@@ -100,7 +99,7 @@ namespace FastBindings
             Sources = sources;
         }
 
-        public override object ProvideValue(IServiceProvider serviceProvider)
+        public override object? ProvideValue(IServiceProvider serviceProvider)
         {
             if (string.IsNullOrEmpty(Sources))
                 return DependencyProperty.UnsetValue;
@@ -111,8 +110,10 @@ namespace FastBindings
                 return DependencyProperty.UnsetValue;
 
             var targetObject = valueTarget?.TargetObject as DependencyObject;
+
             if (targetObject == null)
-                return _updateManager.GetDefaultValue(targetProperty) ?? DependencyProperty.UnsetValue;
+                return DependencyProperty.UnsetValue;
+            _updateManager.Description = Diagnostics.BindingDescriptions.For(this, targetObject.GetType().Name, targetProperty.Name, serviceProvider);
 
             if (_updateManager.CanSubscribeOnDataContext(targetObject))
             {
@@ -122,8 +123,8 @@ namespace FastBindings
             return _updateManager.GetDefaultValue(targetProperty);
         }
 
-        internal override void OnLoaded(DependencyObject targetObject, DependencyProperty targetProperty,
-    DependencyObject dataContextObj)
+        internal override void LazyInitialization(DependencyObject targetObject, DependencyProperty targetProperty,
+    DependencyObject? dataContextObj)
         {
             _updateManager.InitializeAndRefresh(targetObject, targetProperty, CacheStrategy, dataContextObj);
         }

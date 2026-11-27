@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Controls;
 using FastBindings.BindingManagers;
 using FastBindings.Helpers;
@@ -108,6 +108,7 @@ namespace FastBindings
 
         internal override void ApplyTarget(AvaloniaObject targetObject, AvaloniaProperty targetProperty, AvaloniaObject? dataContextObj)
         {
+            _updateManager.Description = Description;
             _updateManager.ApplyTargets(targetObject, targetProperty, dataContextObj);
         }
 
@@ -117,7 +118,6 @@ namespace FastBindings
             var element = sender as Control;
             if (element != null)
             {
-                element.Loaded -= OnTargetLoaded;
                 _updateManager.Initialize(this, CacheStrategy);
             }
         }

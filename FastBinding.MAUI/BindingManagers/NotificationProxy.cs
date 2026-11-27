@@ -22,9 +22,17 @@ namespace FastBindings.BindingManagers
                 return default;
 
             if (string.IsNullOrEmpty(NotificationPath))
+            {
+                if (!(dataContext is IBaseNotificationFilter))
+                    if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.PathNotFound,
+                        detail: $"NotificationName '{NotificationName}' without NotificationPath or Notification: the BindingContext ({dataContext.GetType().Name}) is no notification filter");
                 return dataContext is TNotification ? (TNotification)dataContext : default;
+            }
 
             var result = _treeHelper.GetFinalViewModel(dataContext, NotificationPath);
+            if (!(result is IBaseNotificationFilter))
+                if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.PathNotFound,
+                    detail: $"NotificationPath '{NotificationPath}' on {dataContext.GetType().Name} is {(result == null ? "null" : result.GetType().Name + ", no notification filter")}");
             return result is TNotification ? (TNotification)result : default;
         }
 

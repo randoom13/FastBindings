@@ -1,12 +1,15 @@
 ﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using FastBindings.Diagnostics;
 using FastBindings.Helpers;
 using FastBindings.Interfaces;
 using FastBindings.StateManagerObjects;
 using System;
+using System.Runtime.CompilerServices;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace FastBindings.BindingManagers
 {
@@ -27,6 +30,9 @@ namespace FastBindings.BindingManagers
         private readonly WeakReference _targetObjectRef = new WeakReference(null);
 
         public string Sources { get; set; } = string.Empty;
+
+        /// <summary>What this binding reports its problems as (null while no logger is set).</summary>
+        internal BindingDescription? Description { get; set; }
 
         public string? NotificationPath
         {
@@ -85,10 +91,33 @@ namespace FastBindings.BindingManagers
             _targetObjectRef.Target = targetObject;
             _targetPropertyRef.Target = targetProperty;
             _dataContextParams.AnchorObject = dataContextObj;
+            _dataContextParams.FromParent = targetProperty == StyledElement.DataContextProperty;
         }
 
+        // While Initialize runs, a change of the target is not written to the source: GetObservable(targetProperty) reports the
+        // target's current value as soon as it is subscribed — its default (a ComboBox's SelectedIndex -1) — and a two-way binding
+        // wrote that into the view-model before the view-model's own value reached the target.
+        private bool _initializing;
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public void Initialize(CacheStrategy cacheStrategy)
         {
+            _initializing = true;
+            using var scope = BindingLog.Enter(Description, _targetObjectRef?.Target);
+            try
+            {
+                InitializeCore(cacheStrategy);
+            }
+            finally
+            {
+                _initializing = false;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private void InitializeCore(CacheStrategy cacheStrategy)
+        {
+            FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._started);
             var targetObject = _targetObjectRef.Target as AvaloniaObject;
             var targetProperty = _targetPropertyRef.Target as AvaloniaProperty;
             if (targetObject == null || targetProperty == null)
@@ -96,11 +125,20 @@ namespace FastBindings.BindingManagers
                 return;
             }
 
-            _sourceStateManagers = StateManagerFactory.Build(Sources, targetObject, _dataContextParams, cacheStrategy, _treeHelper);
+            _sourceStateManagers = StateManagerFactory.Build(Sources, targetObject, _dataContextParams, cacheStrategy, _treeHelper, Description);
             if (!_sourceStateManagers.Any())
             {
-                System.Diagnostics.Debug.Write("[FastBinding] Could not create managers");
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.SourcesInvalid, detail: "no source in '" + Sources + "'", target: targetObject, binding: Description);
                 return;
+            }
+            // A plain one-source binding of a CommonBinding pushes its value changes itself (DirectPush): nothing else to apply to
+            // the value, so no lookups by name, no boxing, no publisher and no checks per change.
+            if (_sourceStateManagers.Length >= 1 && _sourceStateManagers[0] is SourceViewModelStateManager<T> first
+                && _treeHelper is LightViewModelTreeHelper && cacheStrategy == CacheStrategy.None
+                && !HasConverter && !HasNotification && TargetNullValue == null && CanTrackViewModelChanges)
+            {
+                first.DirectPush = PushDirect;
+                _direct = first;
             }
             var initialTarget = targetObject;
 
@@ -135,7 +173,7 @@ namespace FastBindings.BindingManagers
             {
                 foreach (var stateManager in _sourceStateManagers)
                 {
-                    stateManager.PropertyUpdated += OnViewModelValueUpdated;
+                    stateManager.ListenTo(this, Updated, OnViewModelValueUpdated);
                     stateManager.Subscribe(dataContext);
                 }
             }
@@ -161,19 +199,17 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred on binding to {initialTarget}.{targetProperty} on " +
-                        $"converter {_convertersProxy.ConverterName ?? "None"} during intialization");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ForwardConverterThrew, ex, ConverterDetail(), initialTarget, dataContextType: dataContext.GetType(), binding: Description);
                     value = new ExceptionHolder(ex);
                 }
             }
             value = CalculateValue(value);
-            if (CanUpdateTarget(value))
+            if (CanUpdateTarget(targetProperty, ref value))
                 UpdateTarget(initialTarget, targetProperty, value);
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private object? CalculateValue(object? val)
         {
             if (!(val is ExceptionHolder))
@@ -183,8 +219,78 @@ namespace FastBindings.BindingManagers
             return FallBackValue ?? val;
         }
 
+        // The pusher for the last source type seen: a binding's source is nearly always one type, so no lookup per change.
+        private Type? _pushType;
+        private string? _pushName;
+        private Action<AvaloniaObject, object>? _pusher;
+        private SourceViewModelStateManager<T>? _direct;
+        private int _refreshQueued;
+
+        /// <summary>
+        /// A value change on the direct path: the target written straight from the source object through one compiled, typed delegate.
+        /// Returns false — the general path takes the change — off the UI thread (that path hands it to the dispatcher), where no
+        /// typed delegate fits the types, or if reading or writing threw (that path turns it into the fallback value).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private bool PushDirect(object source, string name)
+        {
+            if (_updatingSource)
+                return true;
+            if (!(_targetObjectRef.Target is AvaloniaObject target) || !(_targetPropertyRef.Target is AvaloniaProperty property))
+                return true;
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                // A change on another thread: what it read may be overtaken before the UI thread applies it (another worker, a
+                // DataContext swap), so it only asks the UI thread to read the path's end again — the last read applied is the latest.
+                // One request at a time; a change while one waits is covered by the read it will make.
+                if (Interlocked.Exchange(ref _refreshQueued, 1) == 0)
+                    Dispatcher.UIThread.Post(RefreshDirect);
+                return true;
+            }
+            var type = source.GetType();
+            if (!ReferenceEquals(type, _pushType) || !ReferenceEquals(name, _pushName))
+            {
+                _pusher = DirectPushers.For(type, name, property);
+                _pushType = type;
+                _pushName = name;
+            }
+            var pusher = _pusher;
+            if (pusher == null)
+                return false;
+            _updatingTarget = true;
+            try
+            {
+                FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._directPushes);
+                pusher(target, source);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // the general path takes this change, and reports what it meets there
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.FastPathUnavailable, ex, $"the direct push of {name} threw", target, binding: Description);
+                return false;
+            }
+            finally
+            {
+                _updatingTarget = false;
+            }
+        }
+
+        private string ConverterDetail() => $"converter {(_convertersProxy.Converter?.GetType().Name ?? _convertersProxy.ConverterPath ?? "")}{(_convertersProxy.ConverterName != null ? " '" + _convertersProxy.ConverterName + "'" : "")}";
+
+        private void RefreshDirect()
+        {
+            Volatile.Write(ref _refreshQueued, 0);   // before reading: a change from now on asks again
+            _direct?.RefreshFromCurrent();
+        }
+
+        // the listener for the source state managers, made once for every binding (see WeakEventPublisher.Listen)
+        private static readonly Action<object, object, object?> Updated = (manager, sender, value) => ((BindingUpdateManager<T>)manager).OnViewModelValueUpdated(sender, value);
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnViewModelValueUpdated(object? sender, object? value)
         {
+            FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._generalPushes);
             if (_updatingSource)
             {
                 return;
@@ -209,12 +315,19 @@ namespace FastBindings.BindingManagers
 
         private void OnViewModelValueUpdated(AvaloniaObject target, AvaloniaProperty property, object? sender, object? value)
         {
-            var dataContextTarget = _dataContextParams.GetDataContextTarget(target);
-            var dataContext = _dataContextParams.GetDataContext(dataContextTarget);
-            var converterFunc = _convertersProxy.FindForwardConverter(dataContext);
+            using var scope = BindingLog.Enter(Description, _targetObjectRef?.Target);
+            var hasConverter = HasConverter;
+            var hasNotification = HasNotification;
+            object? dataContext = null;
+            if (hasConverter || hasNotification)
+            {
+                var dataContextTarget = _dataContextParams.GetDataContextTarget(target);
+                dataContext = _dataContextParams.GetDataContext(dataContextTarget);
+            }
+            var converterFunc = hasConverter ? _convertersProxy.FindForwardConverter(dataContext) : null;
             if (converterFunc == null)
             {
-                if (!ReferenceEquals(sender, _sourceStateManagers.FirstOrDefault()))
+                if (_sourceStateManagers.Length == 0 || !ReferenceEquals(sender, _sourceStateManagers[0]))
                     return;
             }
             else
@@ -231,35 +344,52 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to prepare data for update {target}.{property}");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ForwardConverterThrew, ex, ConverterDetail(), target, value, dataContext?.GetType(), Description);
                     value = new ExceptionHolder(ex);
                 }
             }
 
             value = CalculateValue(value);
-            if (!CanUpdateTarget(property, value))
+            if (!CanUpdateTarget(property, ref value))
             {
                 return;
             }
             try
             {
-                var ars = NotificationArgs.CreateFromSource(sender, value);
-                if (NeedNotify(dataContext, ars))
+                if (!hasNotification || NeedNotify(dataContext, NotificationArgs.CreateFromSource(sender, value)))
                     UpdateTarget(target, property, value);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to update {target}.{property}");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.NotificationFilterThrew, ex, "notification " + (_notificationProxy.NotificationName ?? ""), target, value, dataContext?.GetType(), Description);
             }
         }
 
 
+        // While its target's DataContext change goes through, a binding writes nothing back. Avalonia's selecting controls defer
+        // their selection while the DataContext updates and, when it ends, clear it and then set the new view-model's value
+        // (OnDataContextEndUpdate): both reached the source as writes, so a view moved to another view-model wrote null and then
+        // its own value into it (a report's grouping rebuilt the report). The change ends with the dispatcher's turn, counted by
+        // one number for the UI thread and one posted step per turn, not one per binding (a view of thousands of bindings
+        // changes DataContext at once). Only the bindings whose DataContext changed in this turn are held back: one flag for the
+        // whole thread also dropped what was typed into a box beside a list whose items changed (at a few frames a second the
+        // turn's end came after the next key).
+        [ThreadStatic] private static int s_turn;
+        [ThreadStatic] private static bool s_turnEndPosted;
+        [ThreadStatic] private static Action? s_endTurn;
+        private int _contextTurn = -1;
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnDataContextChanged(object? sender, EventArgs e)
         {
+            _contextTurn = s_turn;
+            using var scope = BindingLog.Enter(Description, _targetObjectRef?.Target);
+            if (!s_turnEndPosted)
+            {
+                s_turnEndPosted = true;
+                Dispatcher.UIThread.Post(s_endTurn ??= () => { s_turn++; s_turnEndPosted = false; }, DispatcherPriority.Background);
+            }
+            FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._dataContextChanges);
             var target = _targetObjectRef?.Target as AvaloniaObject;
             var property = _targetPropertyRef?.Target as AvaloniaProperty;
             if (target == null || property == null)
@@ -318,14 +448,12 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to calculate value in converter for {target}.{property}");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ForwardConverterThrew, ex, ConverterDetail(), target, dataContextType: dataContext?.GetType(), binding: Description);
                     value = new ExceptionHolder(ex);
                 }
             }
             value = CalculateValue(value);
-            if (CanUpdateTarget(property, value))
+            if (CanUpdateTarget(property, ref value))
             {
                 var ars = NotificationArgs.CreateFromTarget(sender, value);
                 try
@@ -335,12 +463,15 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to update for {target}.{property}");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.NotificationFilterThrew, ex, "notification " + (_notificationProxy.NotificationName ?? ""), target, value, dataContext?.GetType(), Description);
                 }
             }
         }
+
+        // Whether a converter or a notification filter is configured at all: when neither is, a value change needs neither the
+        // DataContext nor a lookup nor NotificationArgs.
+        private bool HasConverter => _convertersProxy.Converter != null || !string.IsNullOrEmpty(_convertersProxy.ConverterName);
+        private bool HasNotification => _notificationProxy.Notification != null || !string.IsNullOrEmpty(_notificationProxy.NotificationName);
 
         private bool CanTrackViewModelChanges =>
             Mode == BindingMode.Default || Mode == BindingMode.OneWay
@@ -354,21 +485,46 @@ namespace FastBindings.BindingManagers
 
         private static bool CanUpdateTarget(object? value) => !(value is ExceptionHolder);
 
-        private static bool CanUpdateTarget(AvaloniaProperty property, object? value)
-            => CanUpdateTarget(value) && ReflectionUtility.IsValidType(value, property.PropertyType);
+        // The value type that last passed the type check for this binding's property: the same type passes again without
+        // GetType().IsAssignableFrom on every change.
+        private Type? _validValueType;
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private bool CanUpdateTarget(AvaloniaProperty property, ref object? value)
+        {
+            if (!CanUpdateTarget(value))
+                return false;
+            if (value != null && ReferenceEquals(value.GetType(), _validValueType))
+                return true;
+            if (!ReflectionUtility.IsValidType(value, property.PropertyType))
+            {
+                if (value == null)
+                {
+                    // no value for a property that cannot hold null (a null on the path, a DataContext going away): the property goes
+                    // back to its default, as an Avalonia binding's does — nothing wrong with the binding, nothing reported
+                    value = AvaloniaProperty.UnsetValue;
+                    return true;
+                }
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ValueNotAssignable, detail: $"{property.Name} is {property.PropertyType.Name}, the value is {value?.GetType().Name}",
+                    target: _targetObjectRef.Target, value: value, binding: Description);
+                return false;
+            }
+            _validValueType = value?.GetType();
+            return true;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void UpdateTarget(AvaloniaObject target, AvaloniaProperty property, object? value)
         {
             _updatingTarget = true;
             try
             {
-                target.SetValue(property, value);
+                FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._targetWrites);
+                TargetSetters.For(property)(target, value);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to update for {target}.{property}");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.TargetRefusedValue, ex, $"setting {target.GetType().Name}.{property.Name}", target, value, binding: Description);
             }
             finally
             {
@@ -378,7 +534,7 @@ namespace FastBindings.BindingManagers
 
         private void OnDependencyPropertyChanged(object? newValue)
         {
-            if (_updatingTarget)
+            if (_updatingTarget || _initializing || _contextTurn == s_turn)
             {
                 return;
             }
@@ -388,29 +544,37 @@ namespace FastBindings.BindingManagers
             {
                 return;
             }
+            using var scope = BindingLog.Enter(Description, _targetObjectRef?.Target);
+            var dataContext = _dataContextParams.GetDataContext(_dataContextParams.GetDataContextTarget(target));
+            var targetValue = target.GetValue(property);
+            var val = targetValue;
+            var backConverterFunc = _convertersProxy.FindBackConverter(dataContext);
+            if (backConverterFunc != null)
+            {
+                try
+                {
+                    val = backConverterFunc(new ConverterBackArgs() { Value = targetValue });
+                }
+                catch (Exception ex)
+                {
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.BackConverterThrew, ex, ConverterDetail(), target, targetValue, dataContext?.GetType(), Description);
+                    return;
+                }
+            }
+            bool notify;
             try
             {
-                var dataContext = _dataContextParams.GetDataContext(_dataContextParams.GetDataContextTarget(target));
-                var backConverterFunc = _convertersProxy.FindBackConverter(dataContext);
-                var targetValue = target.GetValue(property);
-                var val = targetValue;
-                if (backConverterFunc != null)
-                {
-                    var args = new ConverterBackArgs()
-                    {
-                        Value = targetValue
-                    };
-                    val = backConverterFunc(args);
-                }
-                var ars = NotificationArgs.CreateFromTarget(target, val);
-                if (NeedNotify(dataContext, ars))
-                    UpdateSource(val);
+                notify = NeedNotify(dataContext, NotificationArgs.CreateFromTarget(target, val));
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to update for {target}.{property} during dependency property changing");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.NotificationFilterThrew, ex, "notification " + (_notificationProxy.NotificationName ?? ""), target, val, dataContext?.GetType(), Description);
+                return;
+            }
+            if (notify)
+            {
+                FastBindingsDiagnostics.ObserveSourceWrite(target, property.Name, val);
+                UpdateSource(val);
             }
         }
 
@@ -423,6 +587,7 @@ namespace FastBindings.BindingManagers
 
         private void UpdateSource(params object?[] values)
         {
+            FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._sourceWrites);
             _updatingSource = true;
             for (int index = 0; index < _sourceStateManagers.Length; index++)
             {
@@ -433,9 +598,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to set source property");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.SetterThrew, ex, "writing back to the source", _targetObjectRef.Target, values.ElementAtOrDefault(index), binding: Description);
                 }
                 finally
                 {
