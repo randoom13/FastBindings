@@ -1,4 +1,4 @@
-
+﻿
 > FastBinding, AsyncFastBinding, CommonBinding, AsyncCommonBinding,
 OneWayFastBinding, AsyncOneWayFastBinding, OneWayCommonBinding, AsyncOneWayCommonBinding
 
@@ -192,6 +192,10 @@ NoGetter, NoSetter, WriteBackTypeMismatch, ValueNotAssignable, AncestorNotFound 
 Equal declarations share one description (a row template is one, not one per row), and an issue is reported the 1st, 10th,
 100th … time it recurs (`issue.Occurrences`). A logger is called on the thread the binding ran on, and an exception it
 throws is dropped. A name that is not a property shows the binding's FallBackValue (it showed "False").
+Not reported, as a platform binding takes them without complaint: a null in the middle of a path (the path has no value), no
+value for a property that cannot hold null (Avalonia: it goes back to its default, as does a converter's `UnsetValue`;
+`DoNothing` leaves it), and a name not found on the DataContext a control inherits before its own arrives — a name not found is
+reported only if the control still has a DataContext of that type once the dispatcher has caught up and the control is shown.
 
 #FIXED
 It will work
