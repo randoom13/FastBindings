@@ -11,7 +11,11 @@
     <LangVersion>9</LangVersion>
     <Nullable>enable</Nullable>
     <Deterministic>true</Deterministic>
-    <IsPackable>false</IsPackable>
+    <!-- packed from FastBindings.WPF_45.nuspec; the version comes from -p:Version (scripts/pack.sh) -->
+    <NuspecFile>FastBindings.WPF_45.nuspec</NuspecFile>
+    <NuspecBasePath>$(MSBuildProjectDirectory)</NuspecBasePath>
+    <NuspecProperties>version=$(Version)</NuspecProperties>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.ValueTuple" Version="4.5.0" />
