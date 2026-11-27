@@ -6,6 +6,8 @@
     <Border x:Name="NullBool" IsVisible="{f:CommonBinding Child.Shown}" Opacity="{f:CommonBinding Child.Shade}" />
     <!-- what an Avalonia converter returns: UnsetValue (the default), DoNothing (leave it) -->
     <Border x:Name="Unset" IsVisible="{f:CommonBinding Visibility}" />
+    <!-- converted as an Avalonia binding converts: an int into a double both ways -->
+    <Slider x:Name="Steps" Maximum="{f:CommonBinding Count}" Value="{f:CommonBinding Step, Mode=TwoWay}" />
     <!-- its child's binding meets the window's view-model before the panel's own DataContext arrives -->
     <StackPanel x:Name="Own" DataContext="{f:CommonBinding Other}">
       <TextBlock x:Name="FromOther" Text="{f:CommonBinding Name}" />

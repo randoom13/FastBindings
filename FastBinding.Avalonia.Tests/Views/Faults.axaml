@@ -26,6 +26,7 @@
     <TextBox x:Name="Notification" Text="{f:CommonBinding A, Mode=TwoWay, NotificationName=Boom}" />
     <TextBlock x:Name="Invalid" Text="{f:CommonBinding '$[[Nowhere'}" />
     <TextBlock x:Name="Missing" Text="{f:CommonBinding Misspeled, FallBackValue=fallback}" />
+    <Border x:Name="FallsBack" IsVisible="{f:CommonBinding Misspeled, FallBackValue=False}" />
     <TextBox x:Name="NoGetter" Text="{f:CommonBinding WriteOnly, Mode=TwoWay}" />
     <TextBox x:Name="NoSetter" Text="{f:CommonBinding ReadOnly, Mode=TwoWay}" />
     <TextBox x:Name="Mismatch" Text="{f:CommonBinding Count, Mode=TwoWay}" />

@@ -113,5 +113,43 @@ namespace FastBindings.Tests
                 FastBindingsDiagnostics.Logger = null;
             }
         }
+
+        [AvaloniaFact]
+        public void Values_are_converted_as_Avalonia_converts_them()
+        {
+            var log = new CollectingLogger();
+            FastBindingsDiagnostics.Logger = log;
+            try
+            {
+                var vm = new QuietModel();
+                using var ui = Ui.Show(new Quiet(), vm);
+                var slider = ui.Find<Slider>("Steps");
+                Assert.Equal(7, slider.Maximum);
+                Assert.Equal(2, slider.Value);
+                slider.Value = 5;   // a double written back into an int
+                Ui.Settle();
+                Assert.Equal(5, vm.Step);
+                Assert.DoesNotContain(log.Issues, i => i.ElementName == "Steps");
+            }
+            finally
+            {
+                FastBindingsDiagnostics.Logger = null;
+            }
+        }
+
+        [AvaloniaFact]
+        public void A_FallBackValue_written_as_text_is_the_targets_type()
+        {
+            FastBindingsDiagnostics.Logger = new CollectingLogger();
+            try
+            {
+                using var ui = Ui.Show(new Faults(), new Faulty());
+                Assert.False(ui.Find<Border>("FallsBack").IsVisible);   // "False" in the XAML: the bool, as Avalonia's FallbackValue
+            }
+            finally
+            {
+                FastBindingsDiagnostics.Logger = null;
+            }
+        }
     }
 }

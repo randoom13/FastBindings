@@ -509,6 +509,8 @@ namespace FastBindings.BindingManagers
                     value = AvaloniaProperty.UnsetValue;
                     return true;
                 }
+                if (ReflectionUtility.TryConvert(property.PropertyType, ref value))
+                    return true;   // as an Avalonia binding converts: an int into a double, "False" into a bool
                 if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ValueNotAssignable, detail: $"{property.Name} is {property.PropertyType.Name}, the value is {value?.GetType().Name}",
                     target: _targetObjectRef.Target, value: value, binding: Description);
                 return false;

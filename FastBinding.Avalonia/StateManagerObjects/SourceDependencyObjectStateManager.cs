@@ -80,7 +80,7 @@ namespace FastBindings.StateManagerObjects
 
             if (source == null || property == null)
                 return;
-            if (!ReflectionUtility.IsValidType(value, property.PropertyType))
+            if (!ReflectionUtility.IsValidType(value, property.PropertyType) && !ReflectionUtility.TryConvert(property.PropertyType, ref value))
             {
                 if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.WriteBackTypeMismatch, detail: $"{source.GetType().Name}.{property.Name} is {property.PropertyType.Name}, the value is {value?.GetType().Name ?? "null"}",
                     target: source, value: value, binding: Description);

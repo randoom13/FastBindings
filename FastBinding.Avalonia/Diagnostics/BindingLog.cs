@@ -56,18 +56,20 @@ namespace FastBindings.Diagnostics
             var logger = FastBindingsDiagnostics.Logger;
             if (logger == null)
                 return;
-            if (kind == BindingIssueKind.PathNotFound && Settles(logger, exception, detail, target, value, dataContextType, binding))
+            if ((kind == BindingIssueKind.PathNotFound || kind == BindingIssueKind.ValueNotAssignable)
+                && Settles(logger, kind, exception, detail, target, value, dataContextType, binding))
                 return;
             ReportTo(logger, kind, exception, detail, target, value, dataContextType, binding);
         }
 
         /// <summary>
-        /// A name not found on the DataContext a control has now is often only the DataContext it inherits before its own arrives: a
+        /// A name not found on the DataContext a control has now, or a value of the wrong type read from it, is often only the
+        /// DataContext it inherits before its own arrives: a
         /// view whose root binds DataContext="{… Toolbar}" starts its children's bindings against the window's view-model first. Such a
         /// problem is reported only if the control still has a DataContext of that type once the dispatcher has run what is queued
         /// (Background, after the bindings and layout), counted then — never for a DataContext that went on to another type.
         /// </summary>
-        private static bool Settles(BindingLogger logger, Exception? exception, string? detail, object? target, object? value,
+        private static bool Settles(BindingLogger logger, BindingIssueKind kind, Exception? exception, string? detail, object? target, object? value,
             Type? dataContextType, BindingDescription? binding)
         {
             if (binding == null || ReferenceEquals(binding, t_current))
@@ -99,7 +101,7 @@ namespace FastBindings.Diagnostics
                     visual.AttachedToVisualTree += attached;
                     return;
                 }
-                ReportTo(logger, BindingIssueKind.PathNotFound, exception, detail, still, value, type, binding);
+                ReportTo(logger, kind, exception, detail, still, value, type, binding);
             }
         }
 

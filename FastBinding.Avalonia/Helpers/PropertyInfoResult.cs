@@ -62,7 +62,7 @@ namespace FastBindings.Helpers
                     detail: $"{targetType.Name}.{_name} was asked to set an object of type {target?.GetType().Name ?? "null"}", value: value);
                 return false;
             }
-            if (!ReflectionUtility.IsValidType(value, PropertyType))
+            if (!ReflectionUtility.IsValidType(value, PropertyType) && !ReflectionUtility.TryConvert(PropertyType, ref value))
             {
                 if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.WriteBackTypeMismatch,
                     detail: $"{targetType.Name}.{_name} is {PropertyType?.Name ?? "?"}, the value is {value?.GetType().Name ?? "null"}", value: value);

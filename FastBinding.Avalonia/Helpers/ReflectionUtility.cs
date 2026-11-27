@@ -8,6 +8,22 @@ namespace FastBindings.Helpers
 {
     internal static class ReflectionUtility
     {
+        /// <summary>
+        /// The conversion an Avalonia binding makes between the source's and the target's types (its DefaultValueConverter's:
+        /// <see cref="Avalonia.Utilities.TypeUtilities.TryConvert"/>) — an int into a double, the text "False" of a FallBackValue
+        /// into a bool, an enum's name — in the invariant culture, as XAML is written. False when there is none.
+        /// </summary>
+        public static bool TryConvert(Type? expectingType, ref object? value)
+        {
+            if (expectingType == null || value == null)
+                return false;
+            if (!Avalonia.Utilities.TypeUtilities.TryConvert(expectingType, value, System.Globalization.CultureInfo.InvariantCulture, out var converted)
+                || ReferenceEquals(converted, AvaloniaProperty.UnsetValue) || !IsValidType(converted, expectingType))
+                return false;
+            value = converted;
+            return true;
+        }
+
         public static bool IsValidType(object? value, Type? expectingType)
         {
             bool result;
