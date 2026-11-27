@@ -13,7 +13,7 @@
 
         internal void Unsubscribe(EventHandler<TEventArgs> handler)
         {
-            _handlers.RemoveAll(we => !we.IsAlive || we.Equals(handler));
+            _handlers.RemoveAll(we => !we.IsAlive || we.Is(handler));  // was we.Equals(handler): never true, nothing was removed
         }
 
         internal void Unsubscribe()
@@ -23,9 +23,10 @@
 
         internal void RaiseEvent(object? sender, TEventArgs? args)
         {
-            foreach (var handler in _handlers)
+            // by index: a handler may unsubscribe while it is told, which would break a foreach
+            for (var index = 0; index < _handlers.Count; index++)
             {
-                handler.Invoke(sender, args);
+                _handlers[index].Invoke(sender, args);
             }
         }
     }

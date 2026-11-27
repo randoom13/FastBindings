@@ -3,6 +3,7 @@ using FastBindings.Helpers;
 using FastBindings.Interfaces;
 using System.ComponentModel;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 namespace FastBindings
 {
     public abstract class BaseBinding : IMarkupExtension
@@ -81,9 +82,45 @@ namespace FastBindings
             {
                 ApplyTargets(targetObject, targetProperty, anchor);
                 visualElement.Loaded += OnTargetLoaded;
+                // A plain binding (a path from the BindingContext, on the element itself) starts as soon as the element has a
+                // BindingContext, like a compiled binding: in an app Loaded comes only once the platform view is attached, so a
+                // value set then is a second layout pass on a view already measured with the defaults. Not inside ProvideValue:
+                // what it returns is assigned to the property after it, over anything set there.
+                if (anchor == null && ReferenceEquals(visualElement, targetObject) && StartsWithDataContext)
+                    visualElement.BindingContextChanged += OnTargetBindingContext;
             }
 
             return targetProperty.DefaultValue;
+        }
+
+        /// <summary>Whether this binding may start on its element's first BindingContext change, before Loaded.</summary>
+        internal virtual bool StartsWithDataContext => false;
+
+        private bool _started;
+
+        private void OnTargetBindingContext(object? sender, EventArgs e)
+        {
+            if (sender is VisualElement element && element.BindingContext != null)
+            {
+                element.BindingContextChanged -= OnTargetBindingContext;
+                element.Loaded -= OnTargetLoaded;
+                Start(element);
+            }
+        }
+
+        /// <summary>Starts the binding once, whichever comes first: the BindingContext or Loaded.</summary>
+        internal bool TryStart(VisualElement element)
+        {
+            element.BindingContextChanged -= OnTargetBindingContext;
+            if (_started)
+                return false;
+            _started = true;
+            return true;
+        }
+
+        private void Start(VisualElement element)
+        {
+            OnTargetLoaded(element, EventArgs.Empty);
         }
 
         internal abstract void ApplyTargets(BindableObject targetObject, BindableProperty targetProperty, BindableObject? anchorObject);
@@ -173,6 +210,7 @@ namespace FastBindings
             set => _updateManager.Converter = value;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public override object? ProvideValue(IServiceProvider serviceProvider)
         {
             if (string.IsNullOrEmpty(Sources))
@@ -180,6 +218,10 @@ namespace FastBindings
 
             return base.ProvideValue(serviceProvider);
         }
+
+        // a path from the BindingContext and nothing that reads the tree: no $[[...]] source, no DataContextSource
+        internal override bool StartsWithDataContext =>
+            !PropertyPathParser.NeedApply(Sources) && string.IsNullOrEmpty(DataContextSource);
 
         internal override void ApplyTargets(BindableObject targetObject, BindableProperty targetProperty,
             BindableObject? anchorObject)
@@ -193,7 +235,8 @@ namespace FastBindings
             if (element != null)
             {
                 element.Loaded -= OnTargetLoaded;
-                _updateManager.Initialize(CacheStrategy);
+                if (TryStart(element))
+                    _updateManager.Initialize(CacheStrategy);
             }
         }
     }

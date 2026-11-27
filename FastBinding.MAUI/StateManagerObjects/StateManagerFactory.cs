@@ -1,5 +1,6 @@
 ﻿using FastBindings.Helpers;
 using FastBindings.BindingManagers;
+using System.Runtime.CompilerServices;
 
 namespace FastBindings.StateManagerObjects
 {
@@ -10,6 +11,7 @@ namespace FastBindings.StateManagerObjects
         internal const string ErrorMessage = "[FastBinding] An error occurred while attempting to get data from the source property";
         internal const string AsyncErrorMessage = "[AsyncFastBinding] An error occurred while attempting to get data from the source property";
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static ISourceStateManager[] Build<T>(string sources, BindableObject targetObject,
             DataContextParams dataContextParams, CacheStrategy strategy, IViewModelTreeHelper<T> treeHelper)
         {
@@ -38,6 +40,7 @@ namespace FastBindings.StateManagerObjects
                                }).
                 ToArray();
         }
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static ISourceStateManager Parse<T>(string property, BindableObject targetObject, DataContextParams dataContextParams,
               ICache? cache, IViewModelTreeHelper<T> treeHelper)
         {

@@ -85,7 +85,25 @@ namespace FastBindings.BindingManagers
             _dataContextParams.AnchorObject = anchorObject;
         }
 
+        // While Initialize runs, a change of the target is not written to the source: GetObservable(targetProperty) reports the
+        // target's current value — its default — as soon as it is subscribed, and a two-way binding wrote that into the
+        // view-model before the view-model's value reached the target (as BindingUpdateManager did before).
+        private bool _initializing;
+
         public void Initialize(object sender, CacheStrategy cacheStrategy)
+        {
+            _initializing = true;
+            try
+            {
+                InitializeCore(sender, cacheStrategy);
+            }
+            finally
+            {
+                _initializing = false;
+            }
+        }
+
+        private void InitializeCore(object sender, CacheStrategy cacheStrategy)
         {
             var targetObject = _targetObjectRef.Target as BindableObject;
             var targetProperty = _targetPropertyRef.Target as BindableProperty;
@@ -396,7 +414,7 @@ object? dataContext)
 
         private async void OnDependencyPropertyChangedAsync(object? sender, PropertyChangedEventArgs e)
         {
-            if (_updatingTarget)
+            if (_updatingTarget || _initializing)
             {
                 return;
             }

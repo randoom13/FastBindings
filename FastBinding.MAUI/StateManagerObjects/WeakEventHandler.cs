@@ -1,11 +1,21 @@
-﻿using System.Linq.Expressions;
+﻿using System;
+using FastBindings;
+using System.Collections.Concurrent;
+using System.Linq.Expressions;
+using System.Reflection;
 
 namespace FastBindings.StateManagerObjects
 {
     internal class WeakEventHandler<TEventArgs>
     {
-        private readonly WeakReference _targetReference;
-        private readonly Action<object?, TEventArgs?> _delegate;
+        // One compiled "open" delegate per handler method, shared by every subscription of that method: (target, sender, argument)
+        // => ((TTarget)target).Method(sender, argument). Compiling one per subscription cost ~0.3-0.8 ms per binding.
+        private static readonly ConcurrentDictionary<MethodInfo, Action<object, object, TEventArgs?>> OpenDelegates
+            = new ConcurrentDictionary<MethodInfo, Action<object, object, TEventArgs?>>();
+
+        private readonly WeakReference? _targetReference;
+        private readonly Action<object, object, TEventArgs?>? _open;
+        private readonly EventHandler<TEventArgs>? _static;
 
         internal WeakEventHandler(EventHandler<TEventArgs> handler)
         {
@@ -13,29 +23,45 @@ namespace FastBindings.StateManagerObjects
             {
                 throw new ArgumentNullException(nameof(handler));
             }
+            Method = handler.Method;
+            if (handler.Target == null)
+            {
+                _static = handler;  // a static method holds nothing to keep alive
+                return;
+            }
             _targetReference = new WeakReference(handler.Target);
-            // Define the parameters for the expression
-            var senderParam = Expression.Parameter(typeof(object), "sender");
-            var argumentParam = Expression.Parameter(typeof(TEventArgs), "argument");
-
-            // Create the method call expression
-            var target = Expression.Convert(Expression.Property(Expression.Constant(_targetReference), "Target"), handler.Target!.GetType());
-            var methodCall = Expression.Call(
-                target,
-                handler.Method,
-                senderParam,
-                argumentParam);
-            _delegate = Expression.Lambda<Action<object?, TEventArgs?>>(methodCall, senderParam, argumentParam).Compile();
+            _open = OpenDelegates.GetOrAdd(handler.Method, CreateOpen);
         }
 
-        public void Invoke(object? sender, TEventArgs? argument)
+        internal MethodInfo Method { get; }
+
+        private static Action<object, object, TEventArgs?> CreateOpen(MethodInfo method)
         {
-            if (IsAlive)
+            var targetParam = Expression.Parameter(typeof(object), "target");
+            var senderParam = Expression.Parameter(typeof(object), "sender");
+            var argumentParam = Expression.Parameter(typeof(TEventArgs), "argument");
+            var call = Expression.Call(Expression.Convert(targetParam, method.DeclaringType!), method, senderParam, argumentParam);
+            return FastBindingsDiagnostics.Compile(Expression.Lambda<Action<object, object, TEventArgs?>>(call, targetParam, senderParam, argumentParam));
+        }
+
+        public void Invoke(object sender, TEventArgs? argument)
+        {
+            if (_static != null)
             {
-                _delegate(sender, argument);
+                _static(sender, argument!);
+                return;
+            }
+            var target = _targetReference!.Target;  // read once: IsAlive then Target could see it collected in between
+            if (target != null)
+            {
+                _open!(target, sender, argument);
             }
         }
 
-        public bool IsAlive => _targetReference.IsAlive;
+        /// <summary>Whether this subscription is the given handler (the same method on the same target).</summary>
+        internal bool Is(EventHandler<TEventArgs> handler) =>
+            Method == handler.Method && (_static != null ? handler.Target == null : ReferenceEquals(_targetReference!.Target, handler.Target));
+
+        public bool IsAlive => _static != null || _targetReference!.IsAlive;
     }
 }
