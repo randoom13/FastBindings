@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- FastBinding.Net5.Benchmark's program on .NET Framework 4.8 against FastBinding.Net4.5 (Windows only): see README.md -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <OutputType>Exe</OutputType>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>WpfBench</RootNamespace>
+    <AssemblyName>FastBinding.Net4.5.Benchmark</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\FastBinding.Net5.Benchmark\Program.cs" Link="Program.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FastBinding.Net4.5\FastBinding.Net4.5.csproj" />
+  </ItemGroup>
+</Project>

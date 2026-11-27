@@ -94,7 +94,7 @@ namespace FastBindings.BindingManagers
 
             foreach (var stateManager in _sourceStateManagers)
             {
-                stateManager.PropertyUpdated += OnViewModelValueUpdated;
+                stateManager.ListenTo(this, Updated, OnViewModelValueUpdated);
                 stateManager.Subscribe(dataContext);
             }
 
@@ -139,6 +139,9 @@ namespace FastBindings.BindingManagers
 
             return FallBackValue ?? val;
         }
+
+        // the listener for the source state managers, made once for every binding (see WeakEventPublisher.Listen)
+        private static readonly Action<object, object, object?> Updated = (manager, sender, value) => ((OneWayBindingUpdateManager<T>)manager).OnViewModelValueUpdated(sender, value!);
 
         private void OnViewModelValueUpdated(object? sender, object value)
         {

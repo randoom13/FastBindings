@@ -9,10 +9,10 @@ namespace FastBindings.Interfaces
 
     public class ConverterArgs
     {
-        public object[] Values { get; set; }
-        public Type TargetType { get; set; }
+        public object?[] Values { get; set; }
+        public Type? TargetType { get; set; }
         //   public CultureInfo Culture { get; set; }
-        public ConverterArgs(object[] values, Type targetType) 
+        public ConverterArgs(object?[] values, Type? targetType) 
         {
             Values = values;
             TargetType = targetType;
@@ -21,24 +21,23 @@ namespace FastBindings.Interfaces
 
     public class ConverterBackArgs
     {
-        public object Value { get; set; }
+        public object? Value { get; set; }
      //   public Type[] TargetTypes { get; set; }
      //   public CultureInfo Culture { get; set; }
     }
 
     public interface IForwardValueConverter : IValueConverterBase
     {
-        object Convert(string converterName, ConverterArgs args);
+        object Convert(string? converterName, ConverterArgs args);
     }
 
     public interface IAsyncForwardValueConverter : IValueConverterBase
     {
-        Task<object> AsyncConvert(string converterName, ConverterArgs args);
+        Task<object> ConvertAsync(string? converterName, ConverterArgs args);
     }
-
 
     public interface IBackValueConverter : IValueConverterBase
     {
-        object[] ConvertBack(string converterName, ConverterBackArgs args);
+        object?[] ConvertBack(string? converterName, ConverterBackArgs args);
     }
 }

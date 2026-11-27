@@ -1,13 +1,14 @@
 ﻿using FastBindings.Interfaces;
 using System;
+
 namespace FastBindings.Helpers
 {
     internal class SubscriberProxy : ISubscriber<object>
     {
         public object Target { get; set; }
-        private Action<object, object> _onCompletedAction;
-        private Action<object, object> _errorAction;
-        private Action<object, object> _onNextAction;
+        private static Action<object, object?>? _onCompletedAction;
+        private static Action<object, object?>? _errorAction;
+        private static Action<object, object?>? _onNextAction;
         private bool _hasError = false;
         public SubscriberProxy(object target)
         {
@@ -26,11 +27,11 @@ namespace FastBindings.Helpers
         public void OnError(Exception ex)
         {
             _hasError = true;
-            _errorAction = _errorAction ?? ExpressionTreeHelper.CreateMethodAction(Target.GetType(),  nameof(OnCompleted));
+            _errorAction = _errorAction ?? ExpressionTreeHelper.CreateMethodAction(Target.GetType(),  nameof(OnError));
             _errorAction?.Invoke(Target, ex);
         }
 
-        public void OnNext(object val)
+        public void OnNext(object? val)
         {
             if (!_hasError)
             {

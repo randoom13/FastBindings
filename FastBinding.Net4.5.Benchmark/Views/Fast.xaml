@@ -1,0 +1,15 @@
+<UserControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:f="clr-namespace:FastBindings;assembly=FastBinding.Net4.5" x:Class="WpfBench.Views.Fast">
+  <StackPanel>
+    <TextBlock Text="{f:CommonBinding S0}" Width="{f:CommonBinding D0}" IsEnabled="{f:CommonBinding B}" />
+    <TextBlock Text="{f:CommonBinding S1}" Width="{f:CommonBinding D1}" IsEnabled="{f:CommonBinding B}" />
+    <TextBlock Text="{f:CommonBinding S2}" Width="{f:CommonBinding D2}" IsEnabled="{f:CommonBinding B}" />
+    <TextBlock Text="{f:CommonBinding S3}" Width="{f:CommonBinding D0}" IsEnabled="{f:CommonBinding B}" />
+    <TextBlock Text="{f:CommonBinding S4}" Width="{f:CommonBinding D1}" IsEnabled="{f:CommonBinding B}" />
+    <TextBlock Text="{f:CommonBinding S5}" Width="{f:CommonBinding D2}" IsEnabled="{f:CommonBinding B}" />
+    <TextBlock Text="{f:CommonBinding S6}" Width="{f:CommonBinding D0}" IsEnabled="{f:CommonBinding B}" />
+    <TextBlock Text="{f:CommonBinding S7}" Width="{f:CommonBinding D1}" IsEnabled="{f:CommonBinding B}" />
+    <TextBlock Text="{f:CommonBinding S8}" Width="{f:CommonBinding D2}" IsEnabled="{f:CommonBinding B}" />
+    <TextBlock Text="{f:CommonBinding S9}" Width="{f:CommonBinding D0}" IsEnabled="{f:CommonBinding B}" />
+  </StackPanel>
+</UserControl>

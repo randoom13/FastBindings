@@ -1,0 +1,6 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AvaloniaBench" xmlns:f="using:FastBindings" x:Class="AvaloniaBench.FastTwoWay" x:DataType="vm:CheckVm">
+  <StackPanel>
+    <ComboBox ItemsSource="{x:Static vm:CheckVm.Items}" SelectedIndex="{f:CommonBinding Index, Mode=TwoWay}" />
+  </StackPanel>
+</UserControl>

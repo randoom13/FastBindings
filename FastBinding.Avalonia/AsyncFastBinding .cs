@@ -117,7 +117,6 @@ namespace FastBindings
             var element = sender as Control;
             if (element != null)
             {
-                element.Loaded -= OnTargetLoaded;
                 _updateManager.Initialize(this,CacheStrategy);
             }
         }

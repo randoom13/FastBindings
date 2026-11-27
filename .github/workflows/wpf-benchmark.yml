@@ -1,0 +1,42 @@
+name: wpf-benchmark
+
+# Timings only: FastBinding.Net5.Benchmark several times on several runners. Each job builds this branch and 1.1.3's
+# FastBinding.Net5 into two folders, then alternates the runs, so both see the same machine at the same time.
+on:
+  push:
+    paths: [".github/workflows/wpf-benchmark.yml"]   # a change to this file runs it (a fork's branch cannot be dispatched by hand before)
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: runs of each build per job
+        default: "3"
+
+jobs:
+  bench:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: build this branch and 1.1.3
+        shell: bash
+        run: |
+          dotnet build FastBinding.Net5.Benchmark -c Release -o out/branch
+          git rm -rq FastBinding.Net5 && git checkout c0f53c7 -- FastBinding.Net5
+          dotnet build FastBinding.Net5.Benchmark -c Release -o out/old
+      - name: runs
+        shell: bash
+        run: |
+          for i in $(seq 1 ${{ github.event.inputs.runs || 3 }}); do
+            for shared in 1 0; do   # one view-model for every view, then one per view
+              SHARED=$shared DIAG=1 LABEL="runner ${{ matrix.runner }} run $i, this branch" dotnet out/branch/FastBinding.Net5.Benchmark.dll
+              SHARED=$shared LABEL="runner ${{ matrix.runner }} run $i, 1.1.3" ONLY=Fast ROUNDS=5 WARMUP=3 dotnet out/old/FastBinding.Net5.Benchmark.dll
+            done
+          done

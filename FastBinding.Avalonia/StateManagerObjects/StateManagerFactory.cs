@@ -1,6 +1,7 @@
 ﻿using Avalonia;
 using FastBindings.Helpers;
 using System;
+using System.Runtime.CompilerServices;
 using System.Linq;
 
 namespace FastBindings.StateManagerObjects
@@ -11,6 +12,7 @@ namespace FastBindings.StateManagerObjects
         public const string AsyncErrorMessage = "[AsyncFastBinding] An error occurred while attempting to get data from the source property";
 
         private static SourceViewModelCache _cache = new SourceViewModelCache();
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static ISourceStateManager[] Build<T>(string sources, AvaloniaObject targetObject,
             DataContextParams dataContextParams, CacheStrategy strategy, IViewModelTreeHelper<T> treeHelper)
         {
@@ -20,6 +22,12 @@ namespace FastBindings.StateManagerObjects
             }
             ICache? cache = strategy == CacheStrategy.Simple ? _cache : null;
             var obj = dataContextParams.AnchorObject ?? targetObject;
+            if (sources.IndexOf(PropertyPathParser.PropertiesDevider[0]) < 0)
+            {
+                var single = sources.Trim();
+                if (single.Length > 0)
+                    return new[] { ParseOrInvalid(single, obj, dataContextParams, cache, treeHelper) };
+            }
             return sources.Split(new string[] { PropertyPathParser.PropertiesDevider },
                     StringSplitOptions.RemoveEmptyEntries).
                           Select(property =>
@@ -37,6 +45,23 @@ namespace FastBindings.StateManagerObjects
                 ToArray();
         }
 
+        private static ISourceStateManager ParseOrInvalid<T>(string property, AvaloniaObject targetObject, DataContextParams dataContextParams,
+              ICache? cache, IViewModelTreeHelper<T> treeHelper)
+        {
+            try
+            {
+                return Parse<T>(property, targetObject, dataContextParams, cache, treeHelper);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.Write($"[FastBinding] Failed to create source state manager");
+                System.Diagnostics.Debug.Write(ex);
+                System.Diagnostics.Debug.Write(ex.StackTrace);
+                return new InvalidSourceStateManager(ex);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static ISourceStateManager Parse<T>(string property, AvaloniaObject targetObject, DataContextParams dataContextParams,
              ICache? cache, IViewModelTreeHelper<T> treeHelper)
         {

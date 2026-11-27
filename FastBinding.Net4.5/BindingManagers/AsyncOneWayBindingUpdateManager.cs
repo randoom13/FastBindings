@@ -22,7 +22,7 @@ namespace FastBindings.BindingManagers
         private readonly IViewModelTreeHelper<T> _treeHelper;
         private ISourceStateManager[] _sourceStateManagers = new ISourceStateManager[0];
         private readonly ConvertersProxy<T> _convertersProxy;
-        private WeakReference _targetObjectRef = new WeakReference(null);
+        private WeakReference _targetObjectRef = new(null);
         private readonly NotificationProxy<IBaseNotificationFilter, T> _notificationProxy;
 
         public string Target
@@ -32,55 +32,54 @@ namespace FastBindings.BindingManagers
         }
         public string Sources { get; set; } = string.Empty;
 
-        public string NotificationPath
+        public string? NotificationPath
         {
             get => _notificationProxy.NotificationPath;
             set => _notificationProxy.NotificationPath = value;
         }
 
-        public string NotificationName
+        public string? NotificationName
         {
             get => _notificationProxy.NotificationName;
             set => _notificationProxy.NotificationName = value;
         }
 
-        public IBaseNotificationFilter Notification
+        public IBaseNotificationFilter? Notification
         {
             get => _notificationProxy.Notification;
             set => _notificationProxy.Notification = value;
         }
 
-        public string DataContextSource
+        public string? DataContextSource
         {
             get => _dataContextParams.DataContextSource;
             set => _dataContextParams.DataContextSource = value;
         }
 
-        public string ConverterPath
+        public string? ConverterPath
         {
             get => _convertersProxy.ConverterPath;
             set => _convertersProxy.ConverterPath = value;
         }
 
-        public string ConverterName
+        public string? ConverterName
         {
             get => _convertersProxy.ConverterName;
             set => _convertersProxy.ConverterName = value;
         }
 
-        public IValueConverterBase Converter
+        public IValueConverterBase? Converter
         {
             get => _convertersProxy.Converter;
             set => _convertersProxy.Converter = value;
         }
 
-        public object TargetNullValue { get; set; }
-        public object FallBackValue { get; set; }
-
-        private bool _updatingTarget = false;
+        public object? TargetNullValue { get; set; }
+        public object? FallBackValue { get; set; }
         private bool _updatingSource = false;
+        private bool _updatingTarget = false;
 
-        private DataContextParams _dataContextParams = new DataContextParams();
+        private DataContextParams _dataContextParams = new();
 
         public void Initialize(DependencyObject targetObject, CacheStrategy cacheStrategy)
         {
@@ -98,7 +97,7 @@ namespace FastBindings.BindingManagers
             var initialTarget = targetObject;
             var targetContextObject = _dataContextParams.GetDataContextTarget(targetObject);
             var dataContext = _dataContextParams.GetDataContext(targetContextObject);
-            if (!VisualTreeHelperEx.SubscribeDataContext(targetObject, OnDataContextChanged))
+            if (!VisualTreeHelperEx.SubscribeOnDataContext(targetContextObject, OnDataContextChanged))
             {
                 UpdateTarget(initialTarget, TargetNullValue);
                 return;
@@ -107,7 +106,7 @@ namespace FastBindings.BindingManagers
 
             foreach (var stateManager in _sourceStateManagers)
             {
-                stateManager.PropertyUpdated += OnViewModelValueUpdated;
+                stateManager.ListenTo(this, Updated, OnViewModelValueUpdated);
                 stateManager.Subscribe(dataContext);
             }
 
@@ -119,10 +118,10 @@ namespace FastBindings.BindingManagers
             else UpdateTarget(dataContext, initialTarget);
         }
 
-        private async void UpdateTarget(object dataContext, DependencyObject target)
+        private async void UpdateTarget(object? dataContext, DependencyObject target)
         {
             var converterFunc = _convertersProxy.FindAsyncForwardConverter(dataContext);
-            object value;
+            object? value;
             if (converterFunc == null)
             {
                 var manager = _sourceStateManagers.First();
@@ -154,7 +153,7 @@ namespace FastBindings.BindingManagers
             }
         }
 
-        private object CalculateValue(object val)
+        private object? CalculateValue(object? val)
         {
             if (!(val is ExceptionHolder))
                 return val ?? TargetNullValue;
@@ -162,7 +161,10 @@ namespace FastBindings.BindingManagers
             return FallBackValue ?? val;
         }
 
-        private void OnViewModelValueUpdated(object sender, object value)
+        // the listener for the source state managers, made once for every binding (see WeakEventPublisher.Listen)
+        private static readonly Action<object, object, object?> Updated = (manager, sender, value) => ((AsyncOneWayBindingUpdateManager<T>)manager).OnViewModelValueUpdated(sender, value!);
+
+        private void OnViewModelValueUpdated(object? sender, object value)
         {
             if (_updatingSource)
             {
@@ -181,11 +183,11 @@ namespace FastBindings.BindingManagers
             else
             {
                 Action action = () => OnViewModelValueUpdatedAsync(target, sender, value);
-                dispatcher.Invoke(DispatcherPriority.Render, action);
+                dispatcher.BeginInvoke(DispatcherPriority.Render, action);   // never waited for (Invoke could deadlock)
             }
         }
 
-        private async void OnViewModelValueUpdatedAsync(DependencyObject target, object sender, object value)
+        private async void OnViewModelValueUpdatedAsync(DependencyObject target, object? sender, object? value)
         {
             var dataContextTarget = _dataContextParams.GetDataContextTarget(target);
             var dataContext = _dataContextParams.GetDataContext(dataContextTarget);
@@ -241,7 +243,7 @@ namespace FastBindings.BindingManagers
             }
             if (!ReferenceEquals(sender, dataContextTarget))
             {
-                VisualTreeHelperEx.UnSubscribeDataContext(target, OnDataContextChanged);
+                VisualTreeHelperEx.UnSubscribeOnDataContext(target, OnDataContextChanged);
                 if (!ReferenceEquals(sender, dataContextTarget))
                     return;
             }
@@ -249,7 +251,7 @@ namespace FastBindings.BindingManagers
             UpdateTargetAsync(e.NewValue, sender, target);
         }
 
-        private async void UpdateTargetAsync(object dataContext, object sender, DependencyObject target)
+        private async void UpdateTargetAsync(object? dataContext, object? sender, DependencyObject target)
         {
             var converterFunc = _convertersProxy.FindAsyncForwardConverter(dataContext);
             var args = new ConverterArgs(new object[_sourceStateManagers.Length], null);
@@ -273,7 +275,7 @@ namespace FastBindings.BindingManagers
                     }
                 }
             }
-            object value;
+            object? value;
             if (converterFunc == null)
             {
                 value = args.Values.FirstOrDefault();
@@ -300,7 +302,8 @@ namespace FastBindings.BindingManagers
             }
         }
 
-        private async Task UpdateAsync(NotificationArgs ars, DependencyObject target, object value, object dataContext)
+        private async Task UpdateAsync(NotificationArgs ars, DependencyObject target, object? value,
+object? dataContext)
         {
             try
             {
@@ -319,9 +322,9 @@ namespace FastBindings.BindingManagers
             }
         }
 
-        private bool CanUpdateTarget(object value)  => !(value is ExceptionHolder) || _targetInfo.IsObserver;
+        private bool CanUpdateTarget(object? value)  => !(value is ExceptionHolder) || _targetInfo.IsObserver;
 
-        private void UpdateTarget(DependencyObject target, object value)
+        private void UpdateTarget(DependencyObject target, object? value)
         {
             _updatingTarget = true;
             try
@@ -396,19 +399,19 @@ namespace FastBindings.BindingManagers
             }
         }
 
-        private async Task<bool> NeedNotifyAsync(object dataContext, NotificationArgs args, bool isUpdating)
+        private async Task<bool> NeedNotifyAsync(object? dataContext, NotificationArgs args, bool isUpdating)
         {
             args.IsUpdating = isUpdating;
             args.Name = _notificationProxy.NotificationName;
             var filter = _notificationProxy.FindNotification(dataContext);
             if (filter != null)
             {
-                INotificationFilter simpleFilter = filter as INotificationFilter;
+                INotificationFilter? simpleFilter = filter as INotificationFilter;
                 if (simpleFilter != null)
                 {
                     simpleFilter.Notify(args);
                 }
-                IAsyncNotificationFilter asyncFilter = filter as IAsyncNotificationFilter;
+                IAsyncNotificationFilter? asyncFilter = filter as IAsyncNotificationFilter;
                 if (asyncFilter != null)
                 {
                     await asyncFilter.NotifyAsync(args);

@@ -15,18 +15,19 @@ namespace FastBindings.Helpers
         public const string DependencyObjectCurrent = "this";
         public const string TypeLevelSplitter = "/";
         private const string ExpectedSymbols = "$[]";
+        private static readonly char[] ExpectedSymbolChars = ExpectedSymbols.ToCharArray();
         private const string Pattern = @"\$\[\[(?<source>.+?)\]\.(?<property>.+?)\](\[(?<optional>.+?)\])?";
 
-        public string Source { get; private set; }
-        public string Property { get; private set; }
+        public string? Source { get; private set; }
+        public string? Property { get; private set; }
         public string Input { get; private set; }
-        public string Optional { get; private set; }
+        public string? Optional { get; private set; }
 
         public bool IsValid => !string.IsNullOrEmpty(Source) && !string.IsNullOrEmpty(Property);
 
         public static bool NeedApply(string input)
         {
-            return ExpectedSymbols.Any(sym => input.Contains(sym));
+            return input.IndexOfAny(ExpectedSymbolChars) >= 0;   // no closure or iterator per binding
         }
 
         internal PropertyPathParser(string input)
@@ -49,12 +50,12 @@ namespace FastBindings.Helpers
             }
         }
 
-        internal DependencyObject CalculateSource(DependencyObject targetObject)
+        internal DependencyObject? CalculateSource(DependencyObject targetObject)
         {
             return CalculateSource(targetObject, Source);
         }
 
-        internal static DependencyObject CalculateSource(DependencyObject targetObject, string sourceName)
+        internal static DependencyObject? CalculateSource(DependencyObject targetObject, string? sourceName)
         {
             if (string.IsNullOrEmpty(sourceName))
             {
@@ -64,7 +65,7 @@ namespace FastBindings.Helpers
             {
                 return targetObject;
             }
-            DependencyObject source = null;
+            DependencyObject? source = null;
             if (sourceName.Contains(TypeLevelSplitter))
             {
                 var pars = sourceName.Split(new[] { TypeLevelSplitter }, StringSplitOptions.RemoveEmptyEntries);

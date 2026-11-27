@@ -8,50 +8,51 @@ namespace FastBindings.StateManagerObjects
     public class EventInfoArgs
     {
         public WeakReference SenderWeakRef { get; private set; }
-        public Object EventArgs { get; private set; }
+        public object? EventArgs { get; private set; }
         public long Ticks { get; private set; }
-        public string EventName { get; private set; }
+        public string? EventName { get; private set; }
 
-        public static long CalculateTicks() 
+        public static long CalculateTicks()
         {
-          return DateTime.UtcNow.Ticks;
+            return DateTime.UtcNow.Ticks;
         }
 
-        public EventInfoArgs(object sender, object eventArgs, string eventName)
+        public EventInfoArgs(object? sender, object? eventArgs, string? eventName)
         {
-            SenderWeakRef = new WeakReference(sender);
+            SenderWeakRef =new WeakReference(sender);
             EventArgs = eventArgs;
             Ticks = CalculateTicks();
             EventName = eventName;
         }
     }
 
-    internal class SourceEventStateManager : ISourceStateManager
+    internal class SourceEventStateManager : ISourceStateManager, IListenable
     {
-        private readonly string _optional;
+        private readonly string? _optionalPath;
         private readonly WeakReference _eventInfoRef;
         private readonly WeakReference _sourcePropertyRef;
         private readonly WeakEventPublisher<object> _propertyUpdatedPublisher = new WeakEventPublisher<object>();
-        private WeakReference _subscribedDelegateRef;
-        private object _lastValue;
+        private WeakReference? _subscribedDelegateRef;
+        private object? _lastValue;
 
-        public event EventHandlerEx<object> PropertyUpdated
+        public void Listen(object target, Action<object, object, object?> open) => _propertyUpdatedPublisher.Listen(target, open);
+
+        public event EventHandler<object> PropertyUpdated
         {
             add { _propertyUpdatedPublisher.Subscribe(value); }
             remove { _propertyUpdatedPublisher.Unsubscribe(value); }
         }
 
-        public SourceEventStateManager(DependencyObject sourceProperty, EventInfo eventInfo, string optional)
+        public SourceEventStateManager(DependencyObject sourceProperty, EventInfo eventInfo, string? optional)
         {
             _sourcePropertyRef = new WeakReference(sourceProperty);
             _eventInfoRef = new WeakReference(eventInfo);
-            _optional = optional;
+            _optionalPath = optional;
         }
-
         private const string PropertyLevelMark = ".";
-        private static bool TryCalculateValue(string propertyPath, ref object result)
+        private static bool TryCalculateValue(string propertyPath, ref object? result)
         {
-            var propertyAccessor = result;
+            object? propertyAccessor = result;
             foreach (var propertyName in propertyPath.Split(new[] { PropertyLevelMark }, StringSplitOptions.RemoveEmptyEntries))
             {
                 if (propertyAccessor != null)
@@ -70,40 +71,35 @@ namespace FastBindings.StateManagerObjects
             return true;
         }
 
-        private void OnPropertyChanged(object sender, object args)
+        private void OnPropertyChanged(object? sender, object? args)
         {
             var copy = new EventInfoArgs(sender, args, (_eventInfoRef.Target as EventInfo)?.Name);
             _lastValue = copy;
-            if (!string.IsNullOrEmpty(_optional))
+            if (!string.IsNullOrEmpty(_optionalPath))
             {
                 try
                 {
-                    if (!TryCalculateValue(_optional, ref _lastValue))
+                    if (!TryCalculateValue(_optionalPath, ref _lastValue))
                         _lastValue = copy;
                 }
                 catch (Exception ex)
                 {
                     _lastValue = copy;
-                    System.Diagnostics.Debug.WriteLine($"[FastBinding] Failed to calculate value accorting to {_optional}");
+                    System.Diagnostics.Debug.WriteLine($"[FastBinding] Failed to calculate value accorting to {_optionalPath}");
                     System.Diagnostics.Debug.WriteLine($"[FastBinding] {ex.Message}");
                     System.Diagnostics.Debug.WriteLine($"[FastBinding] {ex.StackTrace}");
                 }
             }
             _propertyUpdatedPublisher.RaiseEvent(this, _lastValue);
         }
+        public object? GetSourceProperty(object? dataContext, bool isWrapException) => _lastValue;
 
-        public object GetSourceProperty(object dataContext, bool isWrapException)
-        {
-            return _lastValue;
-        }
-
-
-        public void SetSourceProperty(object value)
+        public void SetSourceProperty(object? value)
         {
             // work only as OneWayToSource binding
         }
 
-        public void Subscribe(object dataContext)
+        public void Subscribe(object? dataContext)
         {
             if (_subscribedDelegateRef?.IsAlive == true)
                 return;
@@ -117,11 +113,11 @@ namespace FastBindings.StateManagerObjects
             try
             {
                 var method = GetType().GetMethod(nameof(OnPropertyChanged), BindingFlags.NonPublic | BindingFlags.Instance);
-                var handler = Delegate.CreateDelegate(eventInfo.EventHandlerType, this, method);
+                var handler = Delegate.CreateDelegate(eventInfo.EventHandlerType!, this, method!);
                 eventInfo.AddEventHandler(source, handler);
                 _subscribedDelegateRef = new WeakReference(handler);
             }
-            catch (Exception ex) 
+            catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[FastBinding] Failed to subscribe to event {eventInfo.Name}");
                 System.Diagnostics.Debug.WriteLine($"[FastBinding] {ex.Message}");
@@ -132,6 +128,5 @@ namespace FastBindings.StateManagerObjects
         public void Unsubscribe()
         {
         }
-
     }
 }

@@ -1,0 +1,4 @@
+<UserControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:f="clr-namespace:FastBindings;assembly=FastBinding.Net4.5" x:Class="FastBindings.Tests.Views.NullValue">
+  <TextBlock x:Name="Text" Text="{f:CommonBinding Maybe, TargetNullValue=none}" />
+</UserControl>

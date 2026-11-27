@@ -5,7 +5,7 @@ namespace FastBindings.Helpers
     {
         private const string ExpectedTaskType = "System.Runtime.CompilerServices.AsyncTaskMethodBuilder";
 
-        public static bool IsTask(object obj)
+        public static bool IsTask(object? obj)
         {
             if (obj == null || !obj.GetType().IsGenericType)
                 return false;
@@ -14,12 +14,12 @@ namespace FastBindings.Helpers
             return type == typeof(Task<>) || type.FullName?.StartsWith(ExpectedTaskType) == true;
         }
 
-        public static async Task<object> GetResult(Task value)
+        public static async Task<object?> GetResult(Task value)
         {
-            await value;
+            await ((Task)value!);
             var type = value.GetType();
             var propertyInfo = type.GetProperty("Result");
-            var result = propertyInfo.GetValue(value, null);
+            var result = propertyInfo?.GetValue(value);
             return result;
         }
     }

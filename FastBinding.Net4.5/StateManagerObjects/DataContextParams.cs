@@ -7,15 +7,15 @@ namespace FastBindings.StateManagerObjects
     internal class DataContextParams
     {
         private WeakReference _anchorObject = new WeakReference(null);
-        public DependencyObject AnchorObject
+        public DependencyObject? AnchorObject
         {
             get => _anchorObject.Target as DependencyObject;
             set { _anchorObject.Target = value; }
         }
 
-        public string DataContextSource { get; set; }
+        public string? DataContextSource { get; set; }
 
-        public DependencyObject GetDataContextTarget(DependencyObject target)
+        public DependencyObject? GetDataContextTarget(DependencyObject target)
         {
             if (string.IsNullOrEmpty(DataContextSource))
             {
@@ -25,7 +25,7 @@ namespace FastBindings.StateManagerObjects
             return PropertyPathParser.CalculateSource(AnchorObject ?? target, DataContextSource);
         }
 
-        public object GetDataContext(DependencyObject target)
+        public object? GetDataContext(DependencyObject? target)
         {
             return target?.GetValue(FrameworkElement.DataContextProperty);
         }
