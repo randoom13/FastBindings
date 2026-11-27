@@ -13,4 +13,5 @@ namespace FastBindings.Tests.Views
     public partial class Fallback : ContentView { public Fallback() => InitializeComponent(); }
     public partial class NullValue : ContentView { public NullValue() => InitializeComponent(); }
     public partial class Accessor : ContentView { public Accessor() => InitializeComponent(); }
+    public partial class Faults : ContentView { public Faults() => InitializeComponent(); }
 }

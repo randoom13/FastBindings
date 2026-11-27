@@ -97,6 +97,7 @@ namespace FastBindings
         internal override void ApplyTargets(BindableObject targetObject, BindableProperty targetProperty,
             BindableObject? anchorObject)
         {
+            _updateManager.Description = Description;
             _updateManager.ApplyTargets(targetObject, targetProperty, anchorObject);
         }
 

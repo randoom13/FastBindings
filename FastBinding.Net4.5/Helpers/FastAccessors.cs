@@ -23,8 +23,10 @@ namespace FastBindings.Helpers
                 return (Func<object, object?>)typeof(Typed<,>).MakeGenericType(property.DeclaringType, property.PropertyType)
                     .GetMethod(nameof(Typed<object, object>.Getter))!.Invoke(null, new object[] { get })!;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                // the general (compiled) accessor is used instead
+                if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.FastPathUnavailable, ex, "no delegate accessor");
                 return null;
             }
         }
@@ -39,8 +41,10 @@ namespace FastBindings.Helpers
                 return (Action<object, object?>)typeof(Typed<,>).MakeGenericType(property.DeclaringType, property.PropertyType)
                     .GetMethod(nameof(Typed<object, object>.Setter))!.Invoke(null, new object[] { set })!;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                // the general (compiled) accessor is used instead
+                if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.FastPathUnavailable, ex, "no delegate accessor");
                 return null;
             }
         }
@@ -64,8 +68,10 @@ namespace FastBindings.Helpers
                 return (Action<DependencyObject, object>)typeof(Typed<,>).MakeGenericType(source.DeclaringType, source.PropertyType)
                     .GetMethod(nameof(Typed<object, object>.Pusher))!.Invoke(null, new object[] { get, target })!;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                // the general (compiled) accessor is used instead
+                if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.FastPathUnavailable, ex, "no delegate accessor");
                 return null;
             }
         }

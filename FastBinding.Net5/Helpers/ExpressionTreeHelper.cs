@@ -35,9 +35,7 @@ namespace FastBindings.Helpers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[FastBinding] Failed to create expression tree for getter");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.GetterThrew, ex, $"no getter could be made for {fieldInfo?.Name} of {targetType.Name}");
                 return null;
             }
         }
@@ -65,9 +63,7 @@ namespace FastBindings.Helpers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[FastBinding] Failed to create expression tree for setter");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.SetterThrew, ex, $"no setter could be made for {fieldInfo?.Name} of {targetType.Name}");
                 return null;
             }
         }

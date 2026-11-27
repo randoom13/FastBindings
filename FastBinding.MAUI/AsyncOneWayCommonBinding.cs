@@ -96,6 +96,7 @@ namespace FastBindings
 
         internal override void Initialize(BindableObject view)
         {
+            _updateManager.Description = Diagnostics.BindingDescriptions.For(this, view.GetType().Name, "Target=" + Target, null);
             var element = view as VisualElement;
             if (element != null)
             {

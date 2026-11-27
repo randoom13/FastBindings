@@ -11,6 +11,12 @@ namespace FastBindings
         public static bool Enabled { get; set; }
 
         /// <summary>
+        /// Where FastBindings reports its bindings' problems (null, the default: nothing is made or reported). Set it before views
+        /// load: a binding is described — its parameters, target and view — while its XAML loads, and only while a logger is set.
+        /// </summary>
+        public static Diagnostics.BindingLogger? Logger { get; set; }
+
+        /// <summary>
         /// Told of every value a two-way binding writes back into its source while <see cref="Enabled"/>: the target object, the
         /// target property's name and the value — to see which bindings write back, and what.
         /// </summary>

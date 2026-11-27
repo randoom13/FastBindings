@@ -1,4 +1,5 @@
-﻿using FastBindings.Helpers;
+﻿using FastBindings.Diagnostics;
+using FastBindings.Helpers;
 using System.Reflection;
 
 namespace FastBindings.StateManagerObjects
@@ -32,6 +33,9 @@ namespace FastBindings.StateManagerObjects
         private readonly WeakEventPublisher<object> _propertyUpdatedPublisher = new WeakEventPublisher<object>();
         private WeakReference? _subscribedDelegateRef;
         private object? _lastValue;
+
+        /// <summary>The binding this source belongs to (null while no logger is set).</summary>
+        internal BindingDescription? Description { get; set; }
 
         public void Listen(object target, Action<object, object, object?> open) => _propertyUpdatedPublisher.Listen(target, open);
 
@@ -72,6 +76,7 @@ namespace FastBindings.StateManagerObjects
 
         private void OnPropertyChanged(object? sender, object? args)
         {
+            using var scope = BindingLog.Enter(Description, sender);
             var copy = new EventInfoArgs(sender, args, (_eventInfoRef.Target as EventInfo)?.Name);
             _lastValue = copy;
             if (!string.IsNullOrEmpty(_optional))
@@ -84,9 +89,8 @@ namespace FastBindings.StateManagerObjects
                 catch (Exception ex)
                 {
                     _lastValue = copy;
-                    System.Diagnostics.Debug.WriteLine($"[FastBinding] Failed to calculate value accorting to {_optional}");
-                    System.Diagnostics.Debug.WriteLine($"[FastBinding] {ex.Message}");
-                    System.Diagnostics.Debug.WriteLine($"[FastBinding] {ex.StackTrace}");
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.EventSourceFailed, ex, $"reading [{_optional}] of the {copy.EventName} event's arguments",
+                        target: sender, binding: Description);
                 }
             }
             _propertyUpdatedPublisher.RaiseEvent(this, _lastValue);
@@ -119,9 +123,8 @@ namespace FastBindings.StateManagerObjects
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[FastBinding] Failed to subscribe to event {eventInfo.Name}");
-                System.Diagnostics.Debug.WriteLine($"[FastBinding] {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"[FastBinding] {ex.StackTrace}");
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.EventSourceFailed, ex, $"subscribing to {source.GetType().Name}.{eventInfo.Name}",
+                    target: source, binding: Description);
             }
         }
 

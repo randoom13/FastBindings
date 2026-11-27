@@ -11,7 +11,10 @@ namespace FastBindings
         [DefaultValue(CacheStrategy.None)]
         public CacheStrategy CacheStrategy { get; set; }
 
-        private static VisualElement? FastCalculateParent(IProvideValueTarget? valueTarget)
+        /// <summary>What this binding reports its problems as; null while no logger is set (see <see cref="FastBindingsDiagnostics.Logger"/>).</summary>
+        internal Diagnostics.BindingDescription? Description;
+
+        private static VisualElement? FastCalculateParent(IProvideValueTarget? valueTarget, BindableObject target, Diagnostics.BindingDescription? binding)
         {
             try
             {
@@ -21,9 +24,8 @@ namespace FastBindings
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[FastBinding] Failed to calculate parent");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.ParentNotFound, ex,
+                    $"the parent of {target.GetType().Name}, read through MAUI's non-public API", target: target, binding: binding);
                 return null;
             }
         }
@@ -39,6 +41,7 @@ namespace FastBindings
             var targetObject = valueTarget?.TargetObject as BindableObject;
             if (targetObject == null)
                 return BindableProperty.UnsetValue;
+            Description = Diagnostics.BindingDescriptions.For(this, targetObject.GetType().Name, targetProperty.PropertyName, serviceProvider);
 
             // Unfortunately, any binding to another dependency object without it does not work.
             var visualElement = targetObject as VisualElement;
@@ -47,7 +50,7 @@ namespace FastBindings
             if (visualElement == null) 
             {
                 // dirty and hack way to get info
-                visualElement = FastCalculateParent(valueTarget);
+                visualElement = FastCalculateParent(valueTarget, targetObject, Description);
                 anchor = visualElement;
             }
             if (visualElement == null)
@@ -280,6 +283,7 @@ namespace FastBindings
         internal override void ApplyTargets(BindableObject targetObject, BindableProperty targetProperty,
             BindableObject? anchorObject)
         {
+            _updateManager.Description = Description;
             _updateManager.ApplyTargets(targetObject, targetProperty, anchorObject);
         }
 

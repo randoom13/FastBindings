@@ -112,6 +112,7 @@ namespace FastBindings
 
             if (targetObject == null)
                 return DependencyProperty.UnsetValue;
+            _updateManager.Description = Diagnostics.BindingDescriptions.For(this, targetObject.GetType().Name, targetProperty.Name, serviceProvider);
 
             if (_updateManager.CanSubscribeOnDataContext(targetObject))
             {

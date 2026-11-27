@@ -1,4 +1,5 @@
-﻿using FastBindings.Helpers;
+﻿using FastBindings.Diagnostics;
+using FastBindings.Helpers;
 using FastBindings.Interfaces;
 using FastBindings.StateManagerObjects;
 using System;
@@ -28,6 +29,9 @@ namespace FastBindings.BindingManagers
         private readonly WeakReference _targetObjectRef = new WeakReference(null);
 
         public string Sources { get; set; } = string.Empty;
+
+        /// <summary>What this binding reports its problems as (null while no logger is set).</summary>
+        internal BindingDescription? Description { get; set; }
 
         public string? NotificationPath
         {
@@ -115,6 +119,7 @@ namespace FastBindings.BindingManagers
         public object? Initialize(DependencyObject targetObject, DependencyProperty targetProperty, CacheStrategy cacheStrategy)
         {
             _initializing = true;
+            using var scope = BindingLog.Enter(Description, targetObject);
             try
             {
                 var value = InitializeCore(targetObject, targetProperty, cacheStrategy);
@@ -131,9 +136,10 @@ namespace FastBindings.BindingManagers
         private object? InitializeCore(DependencyObject targetObject, DependencyProperty targetProperty, CacheStrategy cacheStrategy)
         {
             FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._started);
-            _sourceStateManagers = StateManagerFactory.Build(Sources, targetObject, _dataContextParams, cacheStrategy, _treeHelper);
+            _sourceStateManagers = StateManagerFactory.Build(Sources, targetObject, _dataContextParams, cacheStrategy, _treeHelper, Description);
             if (!_sourceStateManagers.Any())
             {
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.SourcesInvalid, detail: "no source in '" + Sources + "'", target: targetObject, binding: Description);
                 return DependencyProperty.UnsetValue;
             }
             _targetObjectRef.Target = targetObject;
@@ -208,15 +214,12 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred on binding to {initialTarget}.{targetProperty} on " +
-                        $"converter {_convertersProxy.ConverterName ?? "None"} during intialization");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ForwardConverterThrew, ex, ConverterDetail(), initialTarget, dataContextType: dataContext.GetType(), binding: Description);
                     value = new ExceptionHolder(ex);
                 }
             }
             value = CalculateValue(value);
-            return CanUpdateTarget(value) ? value : (targetProperty.DefaultMetadata.DefaultValue ?? DependencyProperty.UnsetValue);
+            return CanUpdateTarget(targetProperty, value) ? value : (targetProperty.DefaultMetadata.DefaultValue ?? DependencyProperty.UnsetValue);
         }
 
         // A value is shown as it is (or TargetNullValue for null); only a failure shows FallBackValue. The test was inverted: every
@@ -277,8 +280,10 @@ namespace FastBindings.BindingManagers
                 pusher(target, source);
                 return true;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                // the general path takes this change, and reports what it meets there
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.FastPathUnavailable, ex, $"the direct push of {name} threw", target, binding: Description);
                 return false;
             }
             finally
@@ -286,6 +291,8 @@ namespace FastBindings.BindingManagers
                 _updatingTarget = false;
             }
         }
+
+        private string ConverterDetail() => $"converter {(_convertersProxy.Converter?.GetType().Name ?? _convertersProxy.ConverterPath ?? "")}{(_convertersProxy.ConverterName != null ? " '" + _convertersProxy.ConverterName + "'" : "")}";
 
         private void RefreshDirect()
         {
@@ -338,6 +345,7 @@ namespace FastBindings.BindingManagers
 
         private void OnViewModelValueUpdated(DependencyObject target, DependencyProperty property, object? sender, object? value)
         {
+            using var scope = BindingLog.Enter(Description, target);
             var hasConverter = HasConverter;
             var hasNotification = HasNotification;
             object? dataContext = null;
@@ -366,9 +374,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to prepare data for update {target}.{property}");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ForwardConverterThrew, ex, ConverterDetail(), target, value, dataContext?.GetType(), Description);
                     value = new ExceptionHolder(ex);
                 }
             }
@@ -383,9 +389,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to update {target}.{property}");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.NotificationFilterThrew, ex, "notification " + (_notificationProxy.NotificationName ?? ""), target, value, dataContext?.GetType(), Description);
                 }
             }
         }
@@ -414,6 +418,7 @@ namespace FastBindings.BindingManagers
             {
                 return;
             }
+            using var scope = BindingLog.Enter(Description, target);
 
             var dataContextTarget = _dataContextParams.GetDataContextTarget(target);
             foreach (var manager in _sourceStateManagers)
@@ -461,9 +466,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to calculate value in converter for {target}.{property}");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ForwardConverterThrew, ex, ConverterDetail(), target, dataContextType: e.NewValue?.GetType(), binding: Description);
                     value = new ExceptionHolder(ex);
                 }
             }
@@ -478,9 +481,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to update for {target}.{property}");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.NotificationFilterThrew, ex, "notification " + (_notificationProxy.NotificationName ?? ""), target, value, e.NewValue?.GetType(), Description);
                 }
             }
         }
@@ -515,7 +516,11 @@ namespace FastBindings.BindingManagers
             if (value != null && ReferenceEquals(value.GetType(), _validValueType))
                 return true;
             if (!ReflectionUtility.IsValidType(value, property.PropertyType))
+            {
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.ValueNotAssignable, detail: $"{property.Name} is {property.PropertyType.Name}, the value is {value?.GetType().Name}",
+                    target: _targetObjectRef.Target, value: value, binding: Description);
                 return false;
+            }
             _validValueType = value?.GetType();
             return true;
         }
@@ -531,9 +536,8 @@ namespace FastBindings.BindingManagers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to update for {target}.{property}");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                // a value the property's validation refuses, or a target owned by another thread
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.TargetRefusedValue, ex, $"setting {target.GetType().Name}.{property.Name}", target, value, binding: Description);
             }
             finally
             {
@@ -570,32 +574,37 @@ namespace FastBindings.BindingManagers
             {
                 return;
             }
+            using var scope = BindingLog.Enter(Description, target);
+            var dataContext = _dataContextParams.GetDataContext(_dataContextParams.GetDataContextTarget(target));
+            var targetValue = target.GetValue(property);
+            var val = targetValue;
+            var backConverterFunc = _convertersProxy.FindBackConverter(dataContext);
+            if (backConverterFunc != null)
+            {
+                try
+                {
+                    val = backConverterFunc(new ConverterBackArgs() { Value = targetValue });
+                }
+                catch (Exception ex)
+                {
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.BackConverterThrew, ex, ConverterDetail(), target, targetValue, dataContext?.GetType(), Description);
+                    return;
+                }
+            }
+            bool notify;
             try
             {
-                var dataContext = _dataContextParams.GetDataContext(_dataContextParams.GetDataContextTarget(target));
-                var backConverterFunc = _convertersProxy.FindBackConverter(dataContext);
-                var targetValue = target.GetValue(property);
-                var val = targetValue;
-                if (backConverterFunc != null)
-                {
-                    var args = new ConverterBackArgs()
-                    {
-                        Value = targetValue
-                    };
-                    val = backConverterFunc(args);
-                }
-                var ars = NotificationArgs.CreateFromTarget(target, val);
-                if (NeedNotify(dataContext, ars))
-                {
-                    FastBindingsDiagnostics.ObserveSourceWrite(target, property.Name, val);
-                    UpdateSource(val);
-                }
+                notify = NeedNotify(dataContext, NotificationArgs.CreateFromTarget(target, val));
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to update for {target}.{property} during dependency property changing");
-                System.Diagnostics.Debug.Write(ex);
-                System.Diagnostics.Debug.Write(ex.StackTrace);
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.NotificationFilterThrew, ex, "notification " + (_notificationProxy.NotificationName ?? ""), target, val, dataContext?.GetType(), Description);
+                return;
+            }
+            if (notify)
+            {
+                FastBindingsDiagnostics.ObserveSourceWrite(target, property.Name, val);
+                UpdateSource(val);
             }
         }
 
@@ -619,9 +628,7 @@ namespace FastBindings.BindingManagers
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.Write($"[FastBinding] An error occurred while attempting to set source property");
-                    System.Diagnostics.Debug.Write(ex);
-                    System.Diagnostics.Debug.Write(ex.StackTrace);
+                    if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.SetterThrew, ex, "writing back to the source", _targetObjectRef.Target, values.ElementAtOrDefault(index), binding: Description);
                 }
                 finally
                 {
