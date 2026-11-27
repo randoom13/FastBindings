@@ -610,6 +610,7 @@ namespace FastBindings.BindingManagers
 
         private bool NeedNotify(object? dataContext, NotificationArgs args)
         {
+            args.Name = _notificationProxy.NotificationName;   // the filter is told which notification it is, as on Avalonia
             _notificationProxy.FindNotification(dataContext)?.Notify(args);
             return !args.Handled;
         }

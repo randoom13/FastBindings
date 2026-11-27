@@ -61,7 +61,11 @@ namespace FastBindings.Tests
         public object?[] ConvertBack(string? converterName, ConverterBackArgs args) =>
             converterName == "ExplodeBack" ? throw new FormatException("the back converter failed") : new[] { args.Value };
         // asked only by the binding that names a notification (NotificationName=Boom)
-        public void Notify(NotificationArgs args) => throw new InvalidOperationException("the notification filter failed");
+        public void Notify(NotificationArgs args)
+        {
+            if (args.Name == "Boom")   // the filter is told which notification it is
+                throw new InvalidOperationException("the notification filter failed");
+        }
     }
 
     /// <summary>An IProvideValueTarget whose parents throw when read: what MAUI's non-public API may do (ParentNotFound).</summary>
