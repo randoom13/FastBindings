@@ -24,6 +24,13 @@ jobs:
           dotnet build FastBinding.Net4.5.Benchmark -c Release -o out/net45
           dotnet build tools/EtwStacks -c Release -o out/etw
           mkdir -p profiles
+      - name: WPF without a profiler (step times and GC pauses)
+        shell: bash
+        run: |
+          for kind in "no bindings" classic FastBindings; do
+            PROFILE="$kind" ROUNDS=20 WARMUP=10 SHARED=0 LABEL=".NET 8" dotnet out/net5/FastBinding.Net5.Benchmark.dll
+            PROFILE="$kind" ROUNDS=20 WARMUP=10 SHARED=0 LABEL=".NET Framework 4.8" out/net45/FastBinding.Net4.5.Benchmark.exe
+          done
       - name: WPF .NET 8 (dotnet-trace)
         shell: bash
         run: |
