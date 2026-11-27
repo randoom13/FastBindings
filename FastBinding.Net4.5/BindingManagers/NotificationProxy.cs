@@ -12,12 +12,12 @@ namespace FastBindings.BindingManagers
         }
         private readonly IViewModelTreeHelper<I> _treeHelper;
 
-        public string NotificationPath { get; set; }
-        public string NotificationName { get; set; }
+        public string? NotificationPath { get; set; }
+        public string? NotificationName { get; set; }
 
-        public T Notification { get; set; }
+        public T? Notification { get; set; }
 
-        private TNotification CalculateNotification<TNotification>(object dataContext)
+        private TNotification? CalculateNotification<TNotification>(object? dataContext)
     where TNotification : IBaseNotificationFilter
         {
             if (dataContext == null || string.IsNullOrEmpty(NotificationName))
@@ -30,12 +30,9 @@ namespace FastBindings.BindingManagers
             return result is TNotification ? (TNotification)result : default;
         }
 
-        internal T FindNotification(object dataContext)
+        internal T? FindNotification(object? dataContext)
         {
-            if (Notification != null)
-                return Notification;
-
-            return CalculateNotification<T>(dataContext);
+            return Notification ?? CalculateNotification<T>(dataContext);
         }
     }
 }

@@ -17,10 +17,10 @@ namespace FastBindings.Helpers
         private const string ExpectedSymbols = "$[]";
         private const string Pattern = @"\$\[\[(?<source>.+?)\]\.(?<property>.+?)\](\[(?<optional>.+?)\])?";
 
-        public string Source { get; private set; }
-        public string Property { get; private set; }
+        public string? Source { get; private set; }
+        public string? Property { get; private set; }
         public string Input { get; private set; }
-        public string Optional { get; private set; }
+        public string? Optional { get; private set; }
 
         public bool IsValid => !string.IsNullOrEmpty(Source) && !string.IsNullOrEmpty(Property);
 
@@ -49,12 +49,12 @@ namespace FastBindings.Helpers
             }
         }
 
-        internal DependencyObject CalculateSource(DependencyObject targetObject)
+        internal DependencyObject? CalculateSource(DependencyObject targetObject)
         {
             return CalculateSource(targetObject, Source);
         }
 
-        internal static DependencyObject CalculateSource(DependencyObject targetObject, string sourceName)
+        internal static DependencyObject? CalculateSource(DependencyObject targetObject, string? sourceName)
         {
             if (string.IsNullOrEmpty(sourceName))
             {
@@ -64,7 +64,7 @@ namespace FastBindings.Helpers
             {
                 return targetObject;
             }
-            DependencyObject source = null;
+            DependencyObject? source = null;
             if (sourceName.Contains(TypeLevelSplitter))
             {
                 var pars = sourceName.Split(new[] { TypeLevelSplitter }, StringSplitOptions.RemoveEmptyEntries);

@@ -1,15 +1,15 @@
 ﻿using System;
 using System.Windows;
 using System.Windows.Media;
-
+using System.Linq;
 namespace FastBindings.Helpers
 {
     internal class VisualTreeHelperEx
     {
-        public static bool CanSubscribeOnDataContext(DependencyObject obj) =>
-           obj != null && (obj is FrameworkElement || obj is FrameworkContentElement);
+        public static bool CanSubscribeOnDataContext(DependencyObject? obj) =>
+           obj != null &&  (obj is FrameworkElement || obj is FrameworkContentElement);
 
-        public static bool SubscribeDataContext(DependencyObject obj, DependencyPropertyChangedEventHandler dataContextChanged)
+        public static bool SubscribeOnDataContext(DependencyObject? obj, DependencyPropertyChangedEventHandler dataContextChanged)
         {
             var frameworkElement = obj as FrameworkElement;
             if (frameworkElement != null)
@@ -29,7 +29,7 @@ namespace FastBindings.Helpers
             return false;
         }
 
-        public static void UnSubscribeDataContext(DependencyObject obj, DependencyPropertyChangedEventHandler dataContextChanged)
+        public static void UnSubscribeOnDataContext(DependencyObject? obj, DependencyPropertyChangedEventHandler dataContextChanged)
         {
             var frameworkElement = obj as FrameworkElement;
             if (frameworkElement != null)
@@ -44,7 +44,7 @@ namespace FastBindings.Helpers
             }
         }
 
-        public static bool SubscribeLoaded(DependencyObject obj, RoutedEventHandler onLoaded)
+        public static bool SubscribeOnLoaded(DependencyObject? obj, RoutedEventHandler onLoaded)
         {
             var frameworkElement = obj as FrameworkElement;
             if (frameworkElement != null)
@@ -64,7 +64,7 @@ namespace FastBindings.Helpers
             return false;
         }
 
-        public static bool UnSubscribeLoaded(DependencyObject obj, RoutedEventHandler onLoaded)
+        public static bool UnSubscribeOnLoaded(DependencyObject? obj, RoutedEventHandler onLoaded)
         {
             var frameworkElement = obj as FrameworkElement;
             if (frameworkElement != null)
@@ -85,14 +85,14 @@ namespace FastBindings.Helpers
         }
 
         public static bool IsAvailable(DependencyObject obj) =>
-            VisualTreeHelper.GetParent(obj) != null ||  LogicalTreeHelper.GetParent(obj) != null;
+            VisualTreeHelper.GetParent(obj) != null || LogicalTreeHelper.GetParent(obj) != null;
 
-        public static T GetParent<T>(DependencyObject obj) where T : DependencyObject
+        public static T? GetParent<T>(DependencyObject obj) where T : DependencyObject
         {
             return VisualTreeHelper.GetParent(obj) as T;
         }
 
-        public static DependencyObject GetParent(DependencyObject obj, int level, Type type)
+        public static DependencyObject? GetParent(DependencyObject? obj, int level, Type type)
         {
             var item = obj;
             var lev = level;
@@ -100,13 +100,15 @@ namespace FastBindings.Helpers
             {
                 item = VisualTreeHelper.GetParent(item);
                 if (item?.GetType() == type)
+                {
                     lev--;
+                }
 
             }
             return item;
         }
 
-        public static DependencyObject GetLogicalParent(DependencyObject obj, int level, Type type)
+        public static DependencyObject? GetLogicalParent(DependencyObject? obj, int level, Type type)
         {
             var item = obj;
             var lev = level;
@@ -114,12 +116,15 @@ namespace FastBindings.Helpers
             {
                 item = LogicalTreeHelper.GetParent(item);
                 if (item?.GetType() == type)
+                {
                     lev--;
+                }
+
             }
             return item;
         }
 
-        public static DependencyObject GetParent(DependencyObject obj, int level, string typeName)
+        public static DependencyObject? GetParent(DependencyObject? obj, int level, string typeName)
         {
             var item = obj;
             var lev = level;
@@ -133,7 +138,8 @@ namespace FastBindings.Helpers
             }
             return item;
         }
-        public static DependencyObject GetLogicalParent(DependencyObject obj, int level, string typeName)
+
+        public static DependencyObject? GetLogicalParent(DependencyObject? obj, int level, string typeName)
         {
             var item = obj;
             var lev = level;
@@ -148,32 +154,13 @@ namespace FastBindings.Helpers
             return item;
         }
 
-
-        public static DependencyObject FindChildByName(DependencyObject parent, string childName)
-        {
-            if (parent == null) 
-                return null;
-
-            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-            {
-                var child = VisualTreeHelper.GetChild(parent, i) as DependencyObject;
-                if (child is FrameworkElement frameworkElement && frameworkElement.Name == childName)
-                    return child;
-
-                // Recursively search in the child
-                var childFound = FindChildByName(child, childName);
-                if (childFound != null)
-                    return childFound;
-            }
-            return null;
-        }
-
-        private static bool ContainsObject(DependencyObject child, DependencyObject obj)
+        private static bool ContainsObject(DependencyObject? child, DependencyObject? obj) 
         {
             if (child == null)
                 return false;
 
             LocalValueEnumerator localValueEnumerator = child.GetLocalValueEnumerator();
+
             while (localValueEnumerator.MoveNext())
             {
                 var value = localValueEnumerator.Current.Value;
@@ -183,7 +170,7 @@ namespace FastBindings.Helpers
             return false;
         }
 
-        public static DependencyObject FindParentByValue(DependencyObject topParent, DependencyObject ch)
+        public static DependencyObject? FindParentByValue(DependencyObject? topParent, DependencyObject? ch)
         {
             if (topParent == null)
                 return null;
@@ -207,5 +194,29 @@ namespace FastBindings.Helpers
             return null;
         }
 
+        public static DependencyObject? FindChildByName(DependencyObject? parent, string childName)
+        {
+            if (parent == null) 
+                return null;
+
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+
+                if (child is FrameworkElement frameworkElement && frameworkElement.Name == childName)
+                {
+                    return child;
+                }
+
+                // Recursively search in the child
+                var childFound = FindChildByName(child, childName);
+                if (childFound != null)
+                {
+                    return childFound;
+                }
+            }
+
+            return null;
+        }
     }
 }

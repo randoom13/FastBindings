@@ -18,17 +18,17 @@ namespace FastBindings.Helpers
 
     public interface IViewModelTreeHelper<T>
     {
-        object GetFinalViewModel(object propertyAccessor, string fullPropertyPath);
-        object GetFinalViewModelEx(object propertyAccessor, string fullPropertyPath);
-        IEnumerable<ViewModelPropertyInfo<T>> CalculateSubscribers(string propertyName, object dataContext);
-        object GetViewModelProperty(string propertyName, object dataContext);
-        Type GetViewModelPropertyType(string propertyName, object dataContext);
-        void SetViewModelProperty(string propertyName, object dataContext, object value);
+        object? GetFinalViewModel(object? propertyAccessor, string fullPropertyPath);
+        object? GetFinalViewModelEx(object? propertyAccessor, string fullPropertyPath);
+        IEnumerable<ViewModelPropertyInfo<T>> CalculateSubscribers(string propertyName, object? dataContext);
+        object? GetViewModelProperty(string propertyName, object? dataContext);
+        Type? GetViewModelPropertyType(string propertyName, object? dataContext);
+        void SetViewModelProperty(string propertyName, object? dataContext, object? value);
     }
 
     internal static class CommonViewModelTreeHelper
     {
-        public static bool SetViewModelProperty(string propertyName, object dataContext, object value)
+        public static bool SetViewModelProperty(string propertyName, object? dataContext, object? value)
         {
             if (string.IsNullOrEmpty(propertyName) || propertyName[propertyName.Length - 1] != MethodMark || dataContext == null)
                 return false;
@@ -40,11 +40,22 @@ namespace FastBindings.Helpers
 
         public const string PropertyLevelMark = ".";
 
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string[]> SegmentsByPath =
+            new System.Collections.Concurrent.ConcurrentDictionary<string, string[]>(StringComparer.Ordinal);
+
+        /// <summary>A property path's names, split once per path string and shared (never changed by callers).</summary>
+        public static string[] Segments(string propertyPath)
+        {
+            if (SegmentsByPath.TryGetValue(propertyPath, out var segments))
+                return segments;
+            return SegmentsByPath.GetOrAdd(propertyPath, p => p.Split(new[] { PropertyLevelMark }, StringSplitOptions.RemoveEmptyEntries));
+        }
+
         private const char MethodMark = '(';
 
-        public static bool TryCalculateValue(string propertyPath, ref object target)
+        public static bool TryCalculateValue(string propertyPath, ref object? target)
         {
-            object propertyAccessor = target;
+            object? propertyAccessor = target;
             foreach (var propertyName in propertyPath.Split(new[] { PropertyLevelMark }, StringSplitOptions.RemoveEmptyEntries))
             {
                 if (propertyAccessor == null)
@@ -60,9 +71,9 @@ namespace FastBindings.Helpers
             return true;
         }
 
-        public static bool TrySetValue(string propertyPath, object target, object value)
+        public static bool TrySetValue(string propertyPath, object? target, object? value)
         {
-            object propertyAccessor = target;
+            object? propertyAccessor = target;
             var properties = propertyPath.Split(new[] { PropertyLevelMark }, StringSplitOptions.RemoveEmptyEntries);
             for (int index = 0; index < properties.Length; index++)
             {

@@ -10,9 +10,14 @@
    <license type="file">LICENSE.txt</license>
                   <repository type="git" url="https://github.com/randoom13/FastBindings.git" branch="dev"/>
 <readme>docs\README.md</readme>
+		<dependencies>
+			<group targetFramework=".NETFramework4.5">
+				<dependency id="System.ValueTuple" version="4.5.0" />
+			</group>
+		</dependencies>
 	</metadata>
 	 <files>
-    <file src="bin\Release\FastBinding.Net4.5.dll" target="lib\net45\FastBinding.Net4.5.dll" />
+    <file src="bin\Release\net45\FastBinding.Net4.5.dll" target="lib\net45\FastBinding.Net4.5.dll" />
  <file src="..\README.md" target="docs\" />
     <file src="LICENSE.txt" target="" />
   </files>
