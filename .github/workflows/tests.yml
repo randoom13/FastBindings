@@ -16,6 +16,10 @@ jobs:
           dotnet-version: 8.0.x
       - run: dotnet test FastBinding.Avalonia.Tests -c Release
       - run: dotnet test FastBinding.MAUI.Tests -c Release -p:MauiCoreOnly=true
+      - name: the Avalonia and WPF examples, built against this repository's FastBinding.Avalonia and FastBinding.Net5
+        run: |
+          dotnet build AvaloniaExample -c Release
+          dotnet build WpfExample -c Release
 
   # WPF needs Windows
   maui-example:
