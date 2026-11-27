@@ -24,7 +24,7 @@ namespace FastBindings.StateManagerObjects
         Task<object?> GetSourcePropertyAsync(object? dataContext, bool isWrapException);
     }
 
-    internal class SourceViewModelStateManager<T> : ISourceStateManager, IAsyncSourceStateManager
+    internal class SourceViewModelStateManager<T> : ISourceStateManager, IAsyncSourceStateManager, IListenable
     {
         private bool _updatingViewModel = false;
 
@@ -48,6 +48,8 @@ namespace FastBindings.StateManagerObjects
         {
             _viewModelTree = tree;
         }
+
+        public void Listen(object target, Action<object, object, object?> open) => _propertyUpdatedPublisher.Listen(target, open);
 
         public event EventHandler<object> PropertyUpdated
         {

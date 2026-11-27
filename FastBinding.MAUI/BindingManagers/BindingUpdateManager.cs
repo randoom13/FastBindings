@@ -93,6 +93,10 @@ namespace FastBindings.BindingManagers
         // view-model's own value reached the target.
         private bool _initializing;
 
+        // The BindingContext the binding last read and subscribed to (weakly: a binding never keeps a view-model alive).
+        private readonly WeakReference _context = new WeakReference(null);
+        private bool _contextKnown;
+
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public void Initialize(CacheStrategy cacheStrategy)
         {
@@ -151,13 +155,17 @@ namespace FastBindings.BindingManagers
                 applyOnTimeMode = true;
             }
             else if (targetObject1 != null)
+            {
                 targetObject1.BindingContextChanged += OnDataContextChanged;
+                _context.Target = dataContext;
+                _contextKnown = true;
+            }
 
             if (!applyOnTimeMode && !CanTrackOnlyTargetChanges)
             {
                 foreach (var stateManager in _sourceStateManagers)
                 {
-                    stateManager.PropertyUpdated += OnViewModelValueUpdated;
+                    stateManager.ListenTo(this, Updated, OnViewModelValueUpdated);
                     stateManager.Subscribe(dataContext);
                 }
             }
@@ -266,6 +274,9 @@ namespace FastBindings.BindingManagers
             _direct?.RefreshFromCurrent();
         }
 
+        // the listener for the source state managers, made once for every binding (see WeakEventPublisher.Listen)
+        private static readonly Action<object, object, object?> Updated = (manager, sender, value) => ((BindingUpdateManager<T>)manager).OnViewModelValueUpdated(sender, value!);
+
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnViewModelValueUpdated(object? sender, object value)
         {
@@ -361,6 +372,13 @@ namespace FastBindings.BindingManagers
             }
 
             var dataContextTarget = _dataContextParams.GetDataContextTarget(target);
+            // MAUI raises BindingContextChanged again with the same object (a ContentView passes its context to its content, then
+            // the layout to its children once more): the binding already reads that object and is subscribed to it.
+            if (_contextKnown && Mode != BindingMode.OneTime && dataContextTarget != null && ReferenceEquals(sender, dataContextTarget)
+                && ReferenceEquals(dataContextTarget.BindingContext, _context.Target))
+            {
+                return;
+            }
             foreach (var manager in _sourceStateManagers)
             {
                 manager.Unsubscribe();
@@ -375,6 +393,7 @@ namespace FastBindings.BindingManagers
             }
 
             var newValue = dataContextTarget?.BindingContext;
+            _context.Target = newValue;
             var converterFunc = _convertersProxy.FindForwardConverter(newValue);
             ConverterArgs args = new ConverterArgs(new object[_sourceStateManagers.Length], property.ReturnType);
             var hasConverter = converterFunc != null;

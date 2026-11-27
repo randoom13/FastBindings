@@ -3,7 +3,7 @@ using System.ComponentModel;
 
 namespace FastBindings.StateManagerObjects
 {
-    internal class SourceDependencyObjectStateManager : ISourceStateManager
+    internal class SourceDependencyObjectStateManager : ISourceStateManager, IListenable
     {
         private string? _optional;
         private readonly WeakReference _sourceObjectRef;
@@ -13,6 +13,8 @@ namespace FastBindings.StateManagerObjects
 
         private bool _updatingDependObj = false;
         private Lazy<PropertyInfoResult> _lazyPropertyInfoResult;
+
+        public void Listen(object target, Action<object, object, object?> open) => _propertyUpdatedPublisher.Listen(target, open);
 
         public event EventHandler<object> PropertyUpdated
         {

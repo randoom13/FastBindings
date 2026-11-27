@@ -33,7 +33,18 @@ namespace FastBindings.StateManagerObjects
             _open = OpenDelegates.GetOrAdd(handler.Method, CreateOpen);
         }
 
-        internal MethodInfo Method { get; }
+        /// <summary>
+        /// A listener given as its target and an open delegate the caller keeps once (a static field): nothing to look up. Reading
+        /// handler.Method is reflection (RuntimeType.GetMethodBase) on every new delegate — the most expensive step of starting a
+        /// binding, paid once per binding.
+        /// </summary>
+        internal WeakEventHandler(object target, Action<object, object, TEventArgs?> open)
+        {
+            _targetReference = new WeakReference(target);
+            _open = open;
+        }
+
+        internal MethodInfo? Method { get; }
 
         private static Action<object, object, TEventArgs?> CreateOpen(MethodInfo method)
         {
@@ -60,7 +71,11 @@ namespace FastBindings.StateManagerObjects
 
         /// <summary>Whether this subscription is the given handler (the same method on the same target).</summary>
         internal bool Is(EventHandler<TEventArgs> handler) =>
-            Method == handler.Method && (_static != null ? handler.Target == null : ReferenceEquals(_targetReference!.Target, handler.Target));
+            Method != null && Method == handler.Method && (_static != null ? handler.Target == null : ReferenceEquals(_targetReference!.Target, handler.Target));
+
+        /// <summary>Whether this subscription is the given listener.</summary>
+        internal bool Is(object target, Action<object, object, TEventArgs?> open) =>
+            Method == null && ReferenceEquals(_open, open) && ReferenceEquals(_targetReference!.Target, target);
 
         public bool IsAlive => _static != null || _targetReference!.IsAlive;
     }
