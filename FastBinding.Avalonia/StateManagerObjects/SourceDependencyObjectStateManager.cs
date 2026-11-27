@@ -5,7 +5,7 @@ using System.Reactive.Linq;
 
 namespace FastBindings.StateManagerObjects
 {
-    internal class SourceDependencyObjectStateManager : ISourceStateManager
+    internal class SourceDependencyObjectStateManager : ISourceStateManager, IListenable
     {
         private readonly WeakReference _sourceObjectRef;
         private readonly WeakReference _sourcePropertyRef;
@@ -14,6 +14,8 @@ namespace FastBindings.StateManagerObjects
         private string? _optional;
         private bool _updatingDependObj = false;
         private Lazy<PropertyInfoResult> _lazyPropertyInfoResult;
+
+        public void Listen(object target, Action<object, object, object?> open) => _propertyUpdatedPublisher.Listen(target, open);
 
         public event EventHandler<object> PropertyUpdated
         {

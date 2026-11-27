@@ -167,7 +167,7 @@ namespace FastBindings.BindingManagers
             {
                 foreach (var stateManager in _sourceStateManagers)
                 {
-                    stateManager.PropertyUpdated += OnViewModelValueUpdated;
+                    stateManager.ListenTo(this, Updated, OnViewModelValueUpdated);
                     stateManager.Subscribe(dataContext);
                 }
             }
@@ -276,6 +276,9 @@ namespace FastBindings.BindingManagers
             Volatile.Write(ref _refreshQueued, 0);   // before reading: a change from now on asks again
             _direct?.RefreshFromCurrent();
         }
+
+        // the listener for the source state managers, made once for every binding (see WeakEventPublisher.Listen)
+        private static readonly Action<object, object, object?> Updated = (manager, sender, value) => ((BindingUpdateManager<T>)manager).OnViewModelValueUpdated(sender, value);
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnViewModelValueUpdated(object? sender, object? value)

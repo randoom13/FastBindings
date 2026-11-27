@@ -26,7 +26,7 @@ namespace FastBindings.StateManagerObjects
         }
     }
 
-    internal class SourceEventStateManager : ISourceStateManager
+    internal class SourceEventStateManager : ISourceStateManager, IListenable
     {
         private readonly WeakReference _eventInfoRef;
         private string? _optional;
@@ -34,6 +34,8 @@ namespace FastBindings.StateManagerObjects
         private readonly WeakEventPublisher<object> _propertyUpdatedPublisher = new WeakEventPublisher<object>();
         private WeakReference? _subscribedDelegateRef;
         private object? _lastValue;
+
+        public void Listen(object target, Action<object, object, object?> open) => _propertyUpdatedPublisher.Listen(target, open);
 
         public event EventHandler<object> PropertyUpdated
         {
