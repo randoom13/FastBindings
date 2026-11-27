@@ -67,3 +67,26 @@ jobs:
           rm DiagnosticsTests.cs Views/AsyncTwoWayCombo.xaml Views/AsyncTwoWayCombo.xaml.cs   # not in 1.1.3 (no AsyncCommonBinding for 4.5)
           sed -i 's/async ? new AsyncTwoWayCombo() : //' BugTests.cs
       - run: dotnet test FastBinding.Net4.5.Tests -c Release --logger "console;verbosity=normal" --blame-hang-timeout 2m
+
+  # timings, not a pass/fail check: WPF's classic {Binding} and CommonBinding, this branch and 1.1.3
+  wpf-benchmark:
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet build FastBinding.Net5.Benchmark -c Release
+      - name: this branch
+        run: dotnet FastBinding.Net5.Benchmark/bin/Release/net8.0-windows/FastBinding.Net5.Benchmark.dll
+        env:
+          LABEL: this branch
+      - name: 1.1.3's FastBinding.Net5
+        shell: bash
+        run: |
+          git rm -rq FastBinding.Net5 && git checkout c0f53c7 -- FastBinding.Net5
+          dotnet build FastBinding.Net5.Benchmark -c Release
+          LABEL=1.1.3 ONLY=Fast ROUNDS=5 dotnet FastBinding.Net5.Benchmark/bin/Release/net8.0-windows/FastBinding.Net5.Benchmark.dll

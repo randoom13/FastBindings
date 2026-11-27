@@ -50,3 +50,17 @@ MODE=checks dotnet run -c Release --project FastBinding.Avalonia.Benchmark      
 
 `MODE=warmup CASE=compiled|fastbindings-common|fastbindings-accessor|reflection` shows what a binding costs on its first and later
 calls; `MODE=push CASE=…` only pushes, for SECONDS, for a CPU profile.
+
+## WPF
+
+`FastBinding.Net5` (.NET 5+) and `FastBinding.Net4.5` (.NET Framework 4.5) have the same fixes; both build on any machine with
+`dotnet build` and are tested on Windows:
+
+```
+dotnet test FastBinding.Net5.Tests      # WPF on .NET 8, Windows
+dotnet test FastBinding.Net4.5.Tests    # WPF on .NET Framework 4.8, Windows
+dotnet run -c Release --project FastBinding.Net5.Benchmark    # classic {Binding} and CommonBinding on the same views
+```
+
+`.github/workflows/tests.yml` runs every test project (Avalonia and MAUI on Linux, WPF on Windows), the WPF tests once more against
+1.1.3 to show what each catches, and the WPF benchmark.
