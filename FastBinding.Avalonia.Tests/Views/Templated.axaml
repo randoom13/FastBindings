@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:f="using:FastBindings" xmlns:t="using:FastBindings.Tests" x:Class="FastBindings.Tests.Views.Templated">
+  <!-- bindings inside a control template: Avalonia sets a template's properties with BindingPriority.Template, where its
+       compiled setter takes a binding or a value of the property's type, never AvaloniaProperty.UnsetValue -->
+  <t:Panelled>
+    <t:Panelled.Theme>
+      <ControlTheme TargetType="t:Panelled">
+        <Setter Property="Template">
+          <ControlTemplate>
+            <StackPanel>
+              <TextBlock x:Name="PART_Title" Text="{f:CommonBinding Title}" />
+              <Button x:Name="PART_Go" Command="{f:CommonBinding Go}" IsVisible="{f:CommonBinding Shown}" />
+            </StackPanel>
+          </ControlTemplate>
+        </Setter>
+      </ControlTheme>
+    </t:Panelled.Theme>
+  </t:Panelled>
+</UserControl>

@@ -65,7 +65,7 @@ namespace FastBindings
                         ElementStarter.OnDataContext(visualElement, this);
                 }
             }
-            return AvaloniaProperty.UnsetValue;
+            return SetsNothing.For(serviceProvider);   // inside a control template, a binding that sets nothing
         }
 
         /// <summary>What this binding reports its problems as; null while no logger is set (see <see cref="FastBindingsDiagnostics.Logger"/>).</summary>
