@@ -330,6 +330,7 @@ namespace FastBindings.BindingManagers
             using var scope = BindingLog.Enter(Description, target);
             try
             {
+                TestFaults.ThrowIfArmed(target);
                 var dataContext = _dataContextParams.GetDataContext(_dataContextParams.GetDataContextTarget(target));
                 if (dataContext == null)
                     return;

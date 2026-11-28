@@ -27,6 +27,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- the tests arm Diagnostics.TestFaults (internal) -->
+    <InternalsVisibleTo Include="FastBinding.Avalonia.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 <ItemGroup>

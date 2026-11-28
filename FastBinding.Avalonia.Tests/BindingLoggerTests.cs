@@ -237,6 +237,45 @@ namespace FastBindings.Tests
             FastBindingsDiagnostics.Logger = null;
         }
 
+        /// <summary>
+        /// A change from a worker thread is applied later on the UI thread, where no caller is left to catch what it throws: the
+        /// guard round it reports the exception as UpdateFailed — never into the dispatcher — and the binding goes on working.
+        /// Nothing real reaches that guard (every step inside reports its own failures), so the test arms one (TestFaults).
+        /// </summary>
+        [AvaloniaTheory]
+        [InlineData("Converted", "WORKER", "AGAIN")]
+        [InlineData("OneWay", "worker", "again")]
+        [InlineData("Async", "worker", "again")]
+        [InlineData("AsyncOneWay", "worker", "again")]
+        public void UpdateFailed(string name, string first, string second)
+        {
+            var log = new CollectingLogger();
+            FastBindingsDiagnostics.Logger = log;
+            try
+            {
+                var vm = new Vm { A = "ui" };
+                using var ui = Ui.Show(new Workers(), vm);
+                var text = ui.Find<TextBlock>(name);
+                var fault = new InvalidOperationException("a posted update failed");
+                TestFaults.FailNextUpdate(text, fault);
+
+                Assert.True(System.Threading.Tasks.Task.Run(() => vm.A = "worker").Wait(TimeSpan.FromSeconds(5)));
+                Ui.Settle();
+                var issue = Single(log, BindingIssueKind.UpdateFailed, name);
+                Assert.Same(fault, issue.Exception);
+                Assert.Equal(BindingIssueSeverity.Error, issue.Severity);
+                Assert.NotEqual(first, text.Text);   // the failed update applied nothing
+
+                Assert.True(System.Threading.Tasks.Task.Run(() => vm.A = "again").Wait(TimeSpan.FromSeconds(5)));
+                Ui.Settle();
+                Assert.Equal(second, text.Text);   // and the binding still follows
+            }
+            finally
+            {
+                FastBindingsDiagnostics.Logger = null;
+            }
+        }
+
         [AvaloniaFact]
         public void A_binding_that_works_reports_nothing()
         {

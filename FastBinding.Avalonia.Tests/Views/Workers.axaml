@@ -17,5 +17,7 @@
       </f:AttachedOneWayBindings.Collections>
     </TextBlock>
     <TextBlock x:Name="Async" Text="{f:AsyncCommonBinding A}" />
+    <!-- a converted common binding: its changes go through the general path, not the direct one -->
+    <TextBlock x:Name="Converted" Text="{f:CommonBinding A, ConverterName=Upper}" />
   </StackPanel>
 </UserControl>

@@ -254,6 +254,7 @@ namespace FastBindings.BindingManagers
         {
             try
             {
+                TestFaults.ThrowIfArmed(target);
                 await OnViewModelValueUpdatedAsync(target, property, sender, value);
             }
             catch (Exception ex)
