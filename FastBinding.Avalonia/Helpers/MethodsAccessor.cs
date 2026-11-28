@@ -43,7 +43,7 @@ namespace FastBindings.Helpers
                 methodAction = ExpressionTreeHelper.CreateMethodAction(TargetType, actionMethodName);
                 if (methodAction == null)
                 {
-                    if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.PathNotFound, detail: $"no method {actionMethodName} of one parameter on {TargetType.Name}", value: value);
+                    if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.PathNotFound, detail: $"no method {actionMethodName} of one parameter or none on {TargetType.Name}", value: value);
                     return;
                 }
 

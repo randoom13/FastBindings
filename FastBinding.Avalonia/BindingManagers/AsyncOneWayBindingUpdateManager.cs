@@ -358,6 +358,8 @@ namespace FastBindings.BindingManagers
 
         private void UpdateTarget(AvaloniaObject target, object? value)
         {
+            if (EventSources.NoneFired(_sourceStateManagers))
+                return;   // no event yet: nothing to give the target
             _updatingTarget = true;
             var stage = BindingIssueKind.MethodTargetThrew;   // what the catch reports: the observer, the view-model's setter or method, the control
             try

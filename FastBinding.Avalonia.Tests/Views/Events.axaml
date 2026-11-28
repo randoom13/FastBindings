@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:f="using:FastBindings" xmlns:t="using:FastBindings.Tests" x:Class="FastBindings.Tests.Views.Events">
+  <!-- events passed to the view-model: a plain CLR event, a routed event's CLR wrapper, a method on a child view-model and one
+       without a parameter, and a check box's event in an item template sent to the panel's view-model through DataContextSource -->
+  <StackPanel>
+    <t:Poker x:Name="Poker">
+      <f:AttachedOneWayBindings.Collections>
+        <f:OneWayBindingCollection>
+          <f:OneWayCommonBinding Sources="$[[this].Poked]" Target="Noted(" />
+        </f:OneWayBindingCollection>
+      </f:AttachedOneWayBindings.Collections>
+    </t:Poker>
+    <Button x:Name="Clicked">
+      <f:AttachedOneWayBindings.Collections>
+        <f:OneWayBindingCollection>
+          <f:OneWayCommonBinding Sources="$[[this].Click]" Target="Child.Noted(" />
+        </f:OneWayBindingCollection>
+      </f:AttachedOneWayBindings.Collections>
+    </Button>
+    <t:Poker x:Name="NoParameter">
+      <f:AttachedOneWayBindings.Collections>
+        <f:OneWayBindingCollection>
+          <f:OneWayCommonBinding Sources="$[[this].Poked]" Target="Counted(" />
+        </f:OneWayBindingCollection>
+      </f:AttachedOneWayBindings.Collections>
+    </t:Poker>
+    <ItemsControl x:Name="Rows" ItemsSource="{f:CommonBinding Rows}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <CheckBox IsChecked="{f:CommonBinding Ticked, Mode=TwoWay}">
+            <f:AttachedOneWayBindings.Collections>
+              <f:OneWayBindingCollection>
+                <f:OneWayCommonBinding Sources="$[[this].IsCheckedChanged]" Target="Counted(" DataContextSource="Events/1" />
+              </f:OneWayBindingCollection>
+            </f:AttachedOneWayBindings.Collections>
+          </CheckBox>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </StackPanel>
+</UserControl>

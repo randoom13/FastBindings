@@ -65,8 +65,26 @@ namespace FastBindings.Helpers
 
         public static Action<object, object?>? CreateMethodAction(Type subscriberType, string methodName)
         {
-            // Get the MethodInfo for the method
-            MethodInfo? methodInfo = subscriberType.GetMethod(methodName);
+            // a public method of that name taking the value, else one taking nothing (an event that is only a signal); GetMethod alone
+            // threw on overloads and a method without a parameter failed at GetParameters()[0]
+            MethodInfo? methodInfo = null, without = null;
+            foreach (var candidate in subscriberType.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (candidate.Name != methodName || candidate.IsGenericMethodDefinition)
+                    continue;
+                var count = candidate.GetParameters().Length;
+                if (count == 1 && methodInfo == null)
+                    methodInfo = candidate;
+                else if (count == 0 && without == null)
+                    without = candidate;
+            }
+            if (methodInfo == null && without != null)
+            {
+                var target = Expression.Parameter(typeof(object), "subscriber");
+                var ignored = Expression.Parameter(typeof(object), "value");
+                return FastBindingsDiagnostics.Compile(Expression.Lambda<Action<object, object?>>(
+                    Expression.Call(Expression.Convert(target, subscriberType), without), target, ignored));
+            }
             if (methodInfo != null)
             {
                 // Create parameter expressions

@@ -27,6 +27,23 @@ namespace FastBindings.StateManagerObjects
         }
     }
 
+    /// <summary>
+    /// A binding whose every source is an event that has not fired yet has no value to give: it writes nothing — not when it starts,
+    /// not when its DataContext changes — where it wrote null (calling a target method with null as if the event had happened).
+    /// </summary>
+    internal static class EventSources
+    {
+        public static bool NoneFired(ISourceStateManager[] managers)
+        {
+            if (managers.Length == 0)
+                return false;
+            foreach (var manager in managers)
+                if (!(manager is SourceEventStateManager events) || events.HasFired)
+                    return false;
+            return true;
+        }
+    }
+
     internal class SourceEventStateManager : ISourceStateManager, IListenable
     {
         private readonly WeakReference _eventInfoRef;
@@ -54,8 +71,13 @@ namespace FastBindings.StateManagerObjects
             _optional = optional;
         }
 
+        /// <summary>Whether its event has fired yet: before that it has no value, and a binding of event sources writes nothing.</summary>
+        internal bool HasFired => System.Threading.Volatile.Read(ref _fired);
+        private bool _fired;
+
         private void OnPropertyChanged(object? sender, object? args)
         {
+            System.Threading.Volatile.Write(ref _fired, true);
             using var scope = BindingLog.Enter(Description, sender);
             var copy = new EventInfoArgs(sender, args, (_eventInfoRef.Target as EventInfo)?.Name);
             _lastValue = copy;

@@ -555,6 +555,8 @@ namespace FastBindings.BindingManagers
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void UpdateTarget(AvaloniaObject target, AvaloniaProperty property, object? value)
         {
+            if (EventSources.NoneFired(_sourceStateManagers))
+                return;   // no event yet: nothing to give the target
             _updatingTarget = true;
             try
             {

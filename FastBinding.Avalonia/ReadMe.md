@@ -117,6 +117,10 @@ $[[ancsestorType/ancestorsLevel].dependencyProperty(event)][optional] — parent
 $[[this].dependencyProperty(event)][optional] — target itself
 ```
 p/s For event binding returns result as EventInfoArgs.
+An event source has no value until its event fires: a binding whose sources are all events writes nothing when it starts or its
+DataContext changes (it called its target with null as if the event had happened). A method target takes the value
+(`Target="Noted("` → `Noted(object? args)`) or nothing (`Counted()`: the event as a signal); `DataContextSource="ViewType/1"`
+sends an event in an item template to the view's own DataContext.
 
 optional - An additional optional field that helps get/set values with using 
 the same dot notation as for accessing ViewModel properties.

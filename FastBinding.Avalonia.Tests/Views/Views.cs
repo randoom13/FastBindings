@@ -5,6 +5,7 @@ namespace FastBindings.Tests.Views
 {
     public partial class Flat : UserControl { public Flat() => AvaloniaXamlLoader.Load(this); }
     public partial class Workers : UserControl { public Workers() => AvaloniaXamlLoader.Load(this); }
+    public partial class Events : UserControl { public Events() => AvaloniaXamlLoader.Load(this); }
     public partial class Dotted : UserControl { public Dotted() => AvaloniaXamlLoader.Load(this); }
     public partial class Lists : UserControl { public Lists() => AvaloniaXamlLoader.Load(this); }
     public partial class TwoWayCombo : UserControl { public TwoWayCombo() => AvaloniaXamlLoader.Load(this); }
