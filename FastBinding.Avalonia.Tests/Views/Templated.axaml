@@ -10,6 +10,14 @@
             <StackPanel>
               <TextBlock x:Name="PART_Title" Text="{f:CommonBinding Title}" />
               <Button x:Name="PART_Go" Command="{f:CommonBinding Go}" IsVisible="{f:CommonBinding Shown}" />
+              <!-- an event binding inside a control template: the compiler sets the attached collection without its static setter -->
+              <TextBox x:Name="PART_Field">
+                <f:AttachedOneWayBindings.Collections>
+                  <f:OneWayBindingCollection>
+                    <f:OneWayCommonBinding Sources="$[[this].PastingFromClipboard]" Target="NotePasted(" />
+                  </f:OneWayBindingCollection>
+                </f:AttachedOneWayBindings.Collections>
+              </TextBox>
             </StackPanel>
           </ControlTemplate>
         </Setter>

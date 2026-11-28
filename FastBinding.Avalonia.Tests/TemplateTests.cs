@@ -21,6 +21,8 @@ namespace FastBindings.Tests
         public string Title { get => _title; set => Set(ref _title, value); }
         public bool Shown { get => _shown; set => Set(ref _shown, value); }
         public ICommand Go { get; } = new Command();
+        public int Pasted { get; private set; }
+        public void NotePasted() => Pasted++;
 
         private sealed class Command : ICommand
         {
@@ -53,6 +55,19 @@ namespace FastBindings.Tests
             Ui.Settle();
             Assert.Equal("Second", title.Text);
             Assert.False(go.IsVisible);
+        }
+
+        [AvaloniaFact]
+        public void An_event_binding_in_a_control_template_calls_its_method()
+        {
+            var vm = new PanelledModel();
+            using var ui = Ui.Show(new Templated(), vm);
+            var field = ui.View.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "PART_Field");
+            Assert.Equal(0, vm.Pasted);
+
+            field.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(TextBox.PastingFromClipboardEvent));
+            Ui.Settle();
+            Assert.Equal(1, vm.Pasted);
         }
     }
 }
