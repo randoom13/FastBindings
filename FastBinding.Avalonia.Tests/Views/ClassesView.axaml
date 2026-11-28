@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:f="using:FastBindings" xmlns:t="using:FastBindings.Tests" x:Class="FastBindings.Tests.Views.ClassesView">
+  <StackPanel>
+    <Border x:Name="Plain" Classes.on="{f:BoolCommonBinding IsOn}" />
+    <Border x:Name="Two" Classes="fixed" Classes.on="{f:BoolCommonBinding IsOn}" Classes.off="{f:BoolCommonBinding IsOff}" />
+    <Border x:Name="Deep" Classes.shown="{f:BoolCommonBinding Child.Shown}" />
+    <Border x:Name="Converted" Classes.on="{f:BoolCommonBinding IsOff, ConverterName=Not}" />
+    <CheckBox x:Name="Enabled" IsEnabled="{f:BoolCommonBinding IsOn}" />
+    <ItemsControl x:Name="Rows" ItemsSource="{f:CommonBinding Rows}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="t:ClassRow">
+          <Border Classes.picked="{f:BoolCommonBinding Picked}" />
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <t:ClassProbe x:Name="Probe" Classes.probed="{t:ClassTargetProbe}" />
+  </StackPanel>
+</UserControl>

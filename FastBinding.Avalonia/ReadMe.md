@@ -171,6 +171,17 @@ Examples:
 <TextBox Text="{custom:AsyncFastBinding Mod.Test, NotificationName =UU, NotificationPath=Mod}" />
 ```
 
+[BoolCommonBinding] — classes bound to a value
+----------------------------------------------
+Avalonia's XAML compiler takes only its own binding object or a constant `bool` on `Classes.name`; a `CommonBinding` there stops
+the build (AVLN3000). `BoolCommonBinding` is a `CommonBinding` whose markup extension returns `bool`, so it is accepted, and it keeps
+the class following its value:
+```xml
+<Border Classes.error="{f:BoolCommonBinding IsBlocking}" Classes.selected="{f:BoolCommonBinding Item.IsPicked}" />
+```
+Everything a `CommonBinding` takes works (DataContextSource, converters, `$[[...]]` sources, diagnostics). It is one-way; a null,
+unset or failed value takes the class off. On an ordinary `bool` property it is an ordinary binding.
+
 [Diagnostics] — what goes wrong in a binding
 -----------------------------------------------
 Set a logger before views load; every problem a binding meets is reported to it, with the binding's description
