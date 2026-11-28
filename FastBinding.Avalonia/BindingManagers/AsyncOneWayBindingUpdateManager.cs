@@ -125,7 +125,7 @@ namespace FastBindings.BindingManagers
 
             foreach (var stateManager in _sourceStateManagers)
             {
-                stateManager.ListenTo(this, Updated, OnViewModelValueUpdated);
+                stateManager.ListenTo(this, Updated, static self => self.OnViewModelValueUpdated);
                 stateManager.Subscribe(dataContext);
             }
             if (dataContext == null)

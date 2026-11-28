@@ -5,7 +5,6 @@ using FastBindings;
 using System.Runtime.CompilerServices;
 using System.Collections.Concurrent;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Reflection;
 
 namespace FastBindings.BindingManagers
@@ -19,51 +18,64 @@ namespace FastBindings.BindingManagers
         private static readonly ConcurrentDictionary<AvaloniaProperty, Action<AvaloniaObject, object?>> Setters
             = new ConcurrentDictionary<AvaloniaProperty, Action<AvaloniaObject, object?>>();
 
-        private static readonly MethodInfo? SetStyled = typeof(AvaloniaObject).GetMethods().FirstOrDefault(m =>
-            m.Name == nameof(AvaloniaObject.SetValue) && m.IsGenericMethodDefinition && m.GetParameters().Length == 3
-            && m.GetParameters()[0].ParameterType.IsGenericType
-            && m.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(StyledProperty<>));
 
-        private static readonly MethodInfo? SetDirect = typeof(AvaloniaObject).GetMethods().FirstOrDefault(m =>
-            m.Name == nameof(AvaloniaObject.SetValue) && m.IsGenericMethodDefinition && m.GetParameters().Length == 2
-            && m.GetParameters()[0].ParameterType.IsGenericType
-            && m.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(DirectPropertyBase<>));
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static Action<AvaloniaObject, object?> For(AvaloniaProperty property) => Setters.GetOrAdd(property, Create);
 
+        // A typed setter made from a generic method for the property's value type — no expression compiled (that took ~3 ms per
+        // property, even with the compiler warm: about 150 ms of a view's start for some fifty bound properties). A value the typed
+        // setter cannot take (a type the property does not have, a null for a value type) goes through SetValue(object) as before.
         private static Action<AvaloniaObject, object?> Create(AvaloniaProperty property)
         {
             try
             {
-                var target = Expression.Parameter(typeof(AvaloniaObject), "target");
-                var value = Expression.Parameter(typeof(object), "value");
                 var type = property.PropertyType;
-                // UnsetValue (TargetNullValue ?? UnsetValue) and values of another type keep the untyped path
-                var typed = Expression.Convert(value, type);
-                Expression? call = null;
                 var propertyType = property.GetType();
-                if (SetStyled != null && IsGeneric(propertyType, typeof(StyledProperty<>), out var styled))
-                    call = Expression.Call(target, SetStyled.MakeGenericMethod(type), Expression.Constant(property, styled!), typed,
-                        Expression.Constant(BindingPriority.LocalValue));
-                else if (SetDirect != null && IsGeneric(propertyType, typeof(DirectPropertyBase<>), out var direct))
-                    call = Expression.Call(target, SetDirect.MakeGenericMethod(type), Expression.Constant(property, direct!), typed);
-                if (call == null)
+                string? kind = IsGeneric(propertyType, typeof(StyledProperty<>), out _) ? nameof(Typed<object>.Styled)
+                    : IsGeneric(propertyType, typeof(DirectPropertyBase<>), out _) ? nameof(Typed<object>.Direct) : null;
+                if (kind == null)
                     return Untyped(property);
-                var fast = FastBindingsDiagnostics.Compile(Expression.Lambda<Action<AvaloniaObject, object?>>(Expression.Block(typeof(void), call), target, value));
-                var slow = Untyped(property);
-                return (t, v) =>
-                {
-                    if (v == null ? !type.IsValueType || Nullable.GetUnderlyingType(type) != null : type.IsInstanceOfType(v))
-                        fast(t, v);
-                    else
-                        slow(t, v);
-                };
+                FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._delegates);
+                return (Action<AvaloniaObject, object?>)typeof(Typed<>).MakeGenericType(type).GetMethod(kind)!.Invoke(null, new object[] { property })!;
             }
             catch (Exception ex)
             {
                 if (Diagnostics.BindingLog.IsOn) Diagnostics.BindingLog.Report(Diagnostics.BindingIssueKind.FastPathUnavailable, ex, $"no typed setter for {property.Name}");
                 return Untyped(property);
+            }
+        }
+
+        private static class Typed<TValue>
+        {
+            private static readonly bool TakesNull = !typeof(TValue).IsValueType || Nullable.GetUnderlyingType(typeof(TValue)) != null;
+
+            public static Action<AvaloniaObject, object?> Styled(AvaloniaProperty property)
+            {
+                var styled = (StyledProperty<TValue>)property;
+                return (target, value) =>
+                {
+                    if (value is TValue typed)
+                        target.SetValue(styled, typed, BindingPriority.LocalValue);
+                    else if (value == null && TakesNull)
+                        target.SetValue(styled, default(TValue)!, BindingPriority.LocalValue);
+                    else
+                        target.SetValue(property, value);
+                };
+            }
+
+            public static Action<AvaloniaObject, object?> Direct(AvaloniaProperty property)
+            {
+                var direct = (DirectPropertyBase<TValue>)property;
+                return (target, value) =>
+                {
+                    if (value is TValue typed)
+                        target.SetValue(direct, typed);
+                    else if (value == null && TakesNull)
+                        target.SetValue(direct, default(TValue)!);
+                    else
+                        target.SetValue(property, value);
+                };
             }
         }
 

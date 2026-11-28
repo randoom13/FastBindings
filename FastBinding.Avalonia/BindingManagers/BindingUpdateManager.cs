@@ -13,7 +13,7 @@ using System.Threading;
 
 namespace FastBindings.BindingManagers
 {
-    internal class BindingUpdateManager<T>
+    internal class BindingUpdateManager<T> : IDirectPush, IContextListener
     {
         public BindingUpdateManager(IViewModelTreeHelper<T> treeHelper)
         {
@@ -26,7 +26,7 @@ namespace FastBindings.BindingManagers
         private ISourceStateManager[] _sourceStateManagers = new ISourceStateManager[0];
         private readonly ConvertersProxy<T> _convertersProxy;
         private readonly NotificationProxy<INotificationFilter, T> _notificationProxy;
-        private readonly WeakReference _targetPropertyRef = new WeakReference(null);
+        private AvaloniaProperty? _targetProperty;
         private readonly WeakReference _targetObjectRef = new WeakReference(null);
 
         public string Sources { get; set; } = string.Empty;
@@ -89,8 +89,9 @@ namespace FastBindings.BindingManagers
         public void ApplyTargets(AvaloniaObject targetObject, AvaloniaProperty targetProperty, AvaloniaObject? dataContextObj)
         {
             _targetObjectRef.Target = targetObject;
-            _targetPropertyRef.Target = targetProperty;
+            _targetProperty = targetProperty;
             _dataContextParams.AnchorObject = dataContextObj;
+            _dataContextParams.TargetRef = _targetObjectRef;
             _dataContextParams.FromParent = targetProperty == StyledElement.DataContextProperty;
         }
 
@@ -119,7 +120,7 @@ namespace FastBindings.BindingManagers
         {
             FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._started);
             var targetObject = _targetObjectRef.Target as AvaloniaObject;
-            var targetProperty = _targetPropertyRef.Target as AvaloniaProperty;
+            var targetProperty = _targetProperty;
             if (targetObject == null || targetProperty == null)
             {
                 return;
@@ -137,7 +138,7 @@ namespace FastBindings.BindingManagers
                 && _treeHelper is LightViewModelTreeHelper && cacheStrategy == CacheStrategy.None
                 && !HasConverter && !HasNotification && TargetNullValue == null && CanTrackViewModelChanges)
             {
-                first.DirectPush = PushDirect;
+                first.DirectPush = this;
                 _direct = first;
             }
             var initialTarget = targetObject;
@@ -161,7 +162,7 @@ namespace FastBindings.BindingManagers
                 {
                     applyOnTimeMode = true;
                 }
-                else frameworkElement.DataContextChanged += OnDataContextChanged;
+                else ContextListeners.Add(frameworkElement, this);
             }
             else
             {
@@ -173,7 +174,7 @@ namespace FastBindings.BindingManagers
             {
                 foreach (var stateManager in _sourceStateManagers)
                 {
-                    stateManager.ListenTo(this, Updated, OnViewModelValueUpdated);
+                    stateManager.ListenTo(this, Updated, static self => self.OnViewModelValueUpdated);
                     stateManager.Subscribe(dataContext);
                 }
             }
@@ -232,11 +233,11 @@ namespace FastBindings.BindingManagers
         /// typed delegate fits the types, or if reading or writing threw (that path turns it into the fallback value).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private bool PushDirect(object source, string name)
+        public bool PushDirect(object source, string name)
         {
             if (_updatingSource)
                 return true;
-            if (!(_targetObjectRef.Target is AvaloniaObject target) || !(_targetPropertyRef.Target is AvaloniaProperty property))
+            if (!(_targetObjectRef.Target is AvaloniaObject target) || !(_targetProperty is AvaloniaProperty property))
                 return true;
             if (!Dispatcher.UIThread.CheckAccess())
             {
@@ -296,7 +297,7 @@ namespace FastBindings.BindingManagers
                 return;
             }
             var target = _targetObjectRef?.Target as AvaloniaObject;
-            var property = _targetPropertyRef?.Target as AvaloniaProperty;
+            var property = _targetProperty;
             if (target == null || property == null)
             {
                 return;
@@ -306,11 +307,31 @@ namespace FastBindings.BindingManagers
             {
                 OnViewModelValueUpdated(target, property, sender, value);
             }
-            else
+            else if (Interlocked.Exchange(ref _generalQueued, 1) == 0)
             {
-                Action action = () => OnViewModelValueUpdated(target, property, sender, value);
-                dispatcher.Invoke(action);
+                // A change on another thread: the UI thread reads the sources again when it gets to it, as the direct path does —
+                // never Dispatcher.Invoke, which held the worker until the UI thread ran it (for ever, while the UI thread waited
+                // for that worker) and made a closure per change. One request at a time: a change while one waits is covered by
+                // the read it makes.
+                dispatcher.Post(_refreshGeneral ??= RefreshGeneral);
             }
+        }
+
+        private int _generalQueued;
+        private Action? _refreshGeneral;
+
+        private void RefreshGeneral()
+        {
+            Volatile.Write(ref _generalQueued, 0);   // before reading: a change from now on asks again
+            var target = _targetObjectRef.Target as AvaloniaObject;
+            var property = _targetProperty;
+            if (target == null || property == null || _sourceStateManagers.Length == 0 || _updatingSource)
+                return;
+            var dataContext = _dataContextParams.GetDataContext(_dataContextParams.GetDataContextTarget(target));
+            if (dataContext == null)
+                return;
+            var first = _sourceStateManagers[0];
+            OnViewModelValueUpdated(target, property, first, first.GetSourceProperty(dataContext, true));
         }
 
         private void OnViewModelValueUpdated(AvaloniaObject target, AvaloniaProperty property, object? sender, object? value)
@@ -379,6 +400,8 @@ namespace FastBindings.BindingManagers
         [ThreadStatic] private static Action? s_endTurn;
         private int _contextTurn = -1;
 
+        void IContextListener.DataContextChanged(object? sender, EventArgs e) => OnDataContextChanged(sender, e);
+
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void OnDataContextChanged(object? sender, EventArgs e)
         {
@@ -391,7 +414,7 @@ namespace FastBindings.BindingManagers
             }
             FastBindingsDiagnostics.Count(ref FastBindingsDiagnostics._dataContextChanges);
             var target = _targetObjectRef?.Target as AvaloniaObject;
-            var property = _targetPropertyRef?.Target as AvaloniaProperty;
+            var property = _targetProperty;
             if (target == null || property == null)
             {
                 return;
@@ -407,7 +430,7 @@ namespace FastBindings.BindingManagers
                 var element = sender as Control;
                 if (element != null)
                 {
-                    element.DataContextChanged -= OnDataContextChanged;
+                    ContextListeners.Remove(element, this);
                 }
                 if (!ReferenceEquals(sender, dataContextTarget))
                     return;
@@ -415,8 +438,9 @@ namespace FastBindings.BindingManagers
 
             var dataContext = dataContextTarget.GetValue(StyledElement.DataContextProperty);
             var converterFunc = _convertersProxy.FindForwardConverter(dataContext);
-            ConverterArgs args = new ConverterArgs(new object[_sourceStateManagers.Length], property.PropertyType);
             var hasConverter = converterFunc != null;
+            var args = hasConverter ? new ConverterArgs(new object[_sourceStateManagers.Length], property.PropertyType) : null;
+            object? first = null;
             var canTrack = CanTrackViewModelChanges;
             if (dataContext != null)
             {
@@ -427,24 +451,24 @@ namespace FastBindings.BindingManagers
                     {
                         manager.Subscribe(dataContext);
                     }
-                    if (hasConverter)
+                    if (args != null)
                     {
                         args.Values[index] = manager.GetSourceProperty(dataContext, false);
                     }
                     else if (index == 0)
-                        args.Values[index] = manager.GetSourceProperty(dataContext, true);
+                        first = manager.GetSourceProperty(dataContext, true);
                 }
             }
             object? value;
             if (converterFunc == null)
             {
-                value = args.Values.FirstOrDefault();
+                value = first;
             }
             else
             {
                 try
                 {
-                    value = converterFunc(args);
+                    value = converterFunc(args!);
                 }
                 catch (Exception ex)
                 {
@@ -455,10 +479,9 @@ namespace FastBindings.BindingManagers
             value = CalculateValue(value);
             if (CanUpdateTarget(property, ref value))
             {
-                var ars = NotificationArgs.CreateFromTarget(sender, value);
                 try
                 {
-                    if (NeedNotify(dataContext, ars))
+                    if (!HasNotification || NeedNotify(dataContext, NotificationArgs.CreateFromTarget(sender, value)))
                         UpdateTarget(target, property, value);
                 }
                 catch (Exception ex)
@@ -545,7 +568,7 @@ namespace FastBindings.BindingManagers
                 return;
             }
             var target = _targetObjectRef?.Target as AvaloniaObject;
-            var property = _targetPropertyRef?.Target as AvaloniaProperty;
+            var property = _targetProperty;
             if (target == null || property == null)
             {
                 return;

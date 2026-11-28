@@ -7,6 +7,7 @@ using AvaloniaBench;
 
 AppBuilder.Configure<App>().UseHeadless(new AvaloniaHeadlessPlatformOptions()).SetupWithoutStarting();
 if (Environment.GetEnvironmentVariable("MODE") == "checks") return Checks.Run();
+if (Environment.GetEnvironmentVariable("MODE") == "costs") return Costs.Run();
 if (Environment.GetEnvironmentVariable("MODE") == "push") return Warmup.Push(Environment.GetEnvironmentVariable("CASE") ?? "compiled");
 if (Environment.GetEnvironmentVariable("MODE") == "warmup") return Warmup.Run(Environment.GetEnvironmentVariable("CASE") ?? "compiled");
 

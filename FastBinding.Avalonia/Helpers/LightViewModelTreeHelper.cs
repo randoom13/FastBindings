@@ -10,15 +10,9 @@ namespace FastBindings.Helpers
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public object? GetFinalViewModel(object? propertyAccessor, string fullPropertyPath)
         {
-            var item = GetPropertyInfos(propertyAccessor, fullPropertyPath).LastOrDefault();
-            if (item == null)
-                return null;
-
-            if (item.Accessor == null)   // a null object on the path: no value, as a platform binding has none
-                return null;
-
-            var info = MembersHelper.GetPropertyAccessor(item.Accessor.GetType());
-            return info.GetProperty(item.Accessor, item.Name);
+            if (!TryOwnerOfLast(propertyAccessor, fullPropertyPath, out var owner, out var name) || owner == null)
+                return null;   // a null object on the path: no value, as a platform binding has none
+            return MembersHelper.GetPropertyAccessor(owner.GetType()).GetProperty(owner, name);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
@@ -29,6 +23,27 @@ namespace FastBindings.Helpers
 
             var info = MembersHelper.GetPropertyAccessor(propertyAccessor.GetType());
             return info.GetProperty(propertyAccessor, propertyPath);
+        }
+
+        /// <summary>
+        /// The object the path's last name is read from, and that name, the names before it read one after the other with nothing
+        /// allocated — what <see cref="GetPropertyInfos"/>'s last entry holds; false where it has none (no object to start from).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private static bool TryOwnerOfLast(object? propertyAccessor, string propertyPath, out object? owner, out string name)
+        {
+            owner = null;
+            name = string.Empty;
+            if (propertyAccessor == null)
+                return false;
+            var names = CommonViewModelTreeHelper.Segments(propertyPath);
+            if (names.Length == 0)
+                return false;
+            for (int index = 0; index < names.Length - 1 && propertyAccessor != null; index++)
+                propertyAccessor = MembersHelper.GetPropertyAccessor(propertyAccessor.GetType()).GetProperty(propertyAccessor, names[index]);
+            owner = propertyAccessor;
+            name = names[names.Length - 1];
+            return true;
         }
 
         private static readonly ViewModelPropertyInfo<object>[] NoInfos = new ViewModelPropertyInfo<object>[0];
@@ -65,45 +80,24 @@ namespace FastBindings.Helpers
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public object? GetViewModelProperty(string propertyName, object? dataContext)
         {
-            var item = GetPropertyInfos(dataContext, propertyName).LastOrDefault();
-            if (item == null || item.Name == null)
-            {
-                return null;
-            }
-            if (item.Accessor == null)   // a null object on the path: no value, as a platform binding has none
-                return null;
-            var info = MembersHelper.GetPropertyAccessor(item.Accessor.GetType());
-            return info.GetProperty(item.Accessor, item.Name);
+            if (!TryOwnerOfLast(dataContext, propertyName, out var owner, out var name) || owner == null)
+                return null;   // a null object on the path: no value, as a platform binding has none
+            return MembersHelper.GetPropertyAccessor(owner.GetType()).GetProperty(owner, name);
         }
 
         public void SetViewModelProperty(string propertyName, object? dataContext, object? value)
         {
-            var propertyAccessor = dataContext;
-            if (propertyAccessor == null)
-                return;
-
-            var item = GetPropertyInfos(propertyAccessor, propertyName).LastOrDefault();
-            if (item?.Accessor != null)   // a null object on the path: nothing to write into
-            {
-                if (!CommonViewModelTreeHelper.SetViewModelProperty(item.Name, item.Accessor, value))
-                {
-                    var info = MembersHelper.GetPropertyAccessor(item.Accessor.GetType());
-                    info.SetProperty(item.Accessor, item.Name, value);
-                }
-            }
+            if (!TryOwnerOfLast(dataContext, propertyName, out var owner, out var name) || owner == null)
+                return;   // a null object on the path: nothing to write into
+            if (!CommonViewModelTreeHelper.SetViewModelProperty(name, owner, value))
+                MembersHelper.GetPropertyAccessor(owner.GetType()).SetProperty(owner, name, value);
         }
 
         public Type? GetViewModelPropertyType(string propertyName, object? dataContext)
         {
-            var item = GetPropertyInfos(dataContext, propertyName).LastOrDefault();
-            if (item == null)
-                return null;
-
-            if (item.Accessor == null)   // a null object on the path: no value, as a platform binding has none
-                return null;
-
-            var info = MembersHelper.GetPropertyAccessor(item.Accessor.GetType());
-            return info.GetPropertyGetterType(item.Name);
+            if (!TryOwnerOfLast(dataContext, propertyName, out var owner, out var name) || owner == null)
+                return null;   // a null object on the path: no value, as a platform binding has none
+            return MembersHelper.GetPropertyAccessor(owner.GetType()).GetPropertyGetterType(name);
         }
     }
 }

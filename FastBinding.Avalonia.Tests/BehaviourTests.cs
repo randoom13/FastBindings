@@ -127,6 +127,22 @@ namespace FastBindings.Tests
             Assert.Equal("worker", ui.Find<TextBlock>("Text").Text);
         }
 
+        /// <summary>
+        /// A converted binding's change on a worker thread never waits for the UI thread: it was handed over with Dispatcher.Invoke,
+        /// which blocked the worker until the UI thread ran it — for ever, while the UI thread waited for that worker.
+        /// </summary>
+        [AvaloniaFact]
+        public void A_converted_change_on_a_worker_thread_never_waits_for_the_UI_thread()
+        {
+            var vm = new Vm { A = "ui" };
+            using var ui = Ui.Show(new Converted(), vm);
+            Assert.Equal("UI", ui.Find<TextBlock>("Text").Text);
+            var worker = Task.Run(() => vm.A = "worker");
+            Assert.True(worker.Wait(TimeSpan.FromSeconds(5)), "the worker waited for the UI thread");
+            Ui.Settle();
+            Assert.Equal("WORKER", ui.Find<TextBlock>("Text").Text);
+        }
+
         [AvaloniaFact]
         public void FastBinding_reads_an_IPropertyAccessor_view_model()
         {

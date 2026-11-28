@@ -25,6 +25,12 @@ namespace FastBindings.StateManagerObjects
         Task<object?> GetSourcePropertyAsync(object? dataContext, bool isWrapException);
     }
 
+    /// <summary>What takes a plain binding's value changes straight to its target (the binding manager itself: no delegate per binding).</summary>
+    internal interface IDirectPush
+    {
+        bool PushDirect(object source, string name);
+    }
+
     internal class SourceViewModelStateManager<T> : ISourceStateManager, IAsyncSourceStateManager, IListenable, IDescribedSource
     {
         private bool _updatingViewModel = false;
@@ -44,7 +50,7 @@ namespace FastBindings.StateManagerObjects
             DataContextParams dataContextParms)
         {
             _propertyNamePath = propertyName;
-            _targetObjectRef = new WeakReference(targetObject);
+            _targetObjectRef = dataContextParms.TargetRef is { } shared && ReferenceEquals(shared.Target, targetObject) ? shared : new WeakReference(targetObject);
             _dataContextParams = dataContextParms;
         }
 
@@ -102,9 +108,14 @@ namespace FastBindings.StateManagerObjects
                     return ExceptionUtility.Wrap(ex, isWrapException, StateManagerFactory.ErrorMessage, binding: Description);
                 }
             }
-            return ExceptionUtility.Handle(() =>
-            _viewModelTree?.GetViewModelProperty(_propertyNamePath, dataContext),
-            isWrapException, StateManagerFactory.ErrorMessage, binding: Description);
+            try
+            {
+                return _viewModelTree?.GetViewModelProperty(_propertyNamePath, dataContext);   // no closure per read
+            }
+            catch (Exception ex)
+            {
+                return ExceptionUtility.Wrap(ex, isWrapException, StateManagerFactory.ErrorMessage, binding: Description);
+            }
         }
 
         public Task<object?> GetSourcePropertyAsync(object? dataContext, bool isWrapException)
@@ -140,7 +151,7 @@ namespace FastBindings.StateManagerObjects
         /// Set by a plain binding (no converter, notification, cache or async): told the object the path ends on and the last name,
         /// it writes the value into its target itself and returns true; false sends this change down the general path below.
         /// </summary>
-        internal Func<object, string, bool>? DirectPush { get; set; }
+        internal IDirectPush? DirectPush { get; set; }
 
         /// <summary>Tells the binding the value at the path's current end again, read now (on the UI thread, by the direct path).</summary>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
@@ -162,7 +173,7 @@ namespace FastBindings.StateManagerObjects
                 return;
             using var scope = BindingLog.Enter(Description, _targetObjectRef?.Target);
             if (DirectPush != null && Cache == null && !SupportAsync && finalPropertyInfo.Accessor is object last
-                && DirectPush(last, finalPropertyInfo.Name))
+                && DirectPush.PushDirect(last, finalPropertyInfo.Name))
                 return;
 
             object? value;
@@ -272,11 +283,30 @@ namespace FastBindings.StateManagerObjects
                         _subscriptions.Add((source, subscription));
                     }
                 }
-                if (subscribers.Length == 1 || SamePath(subscribers, _viewModelTree!.CalculateSubscribers(_propertyNamePath, dataContext)))
+                if (subscribers.Length == 1 || (_viewModelTree is LightViewModelTreeHelper ? StillSamePath(subscribers, dataContext)
+                    : SamePath(subscribers, _viewModelTree!.CalculateSubscribers(_propertyNamePath, dataContext))))
                 {
                     return;
                 }
             }
+        }
+
+        /// <summary>
+        /// Whether the path still reads the objects it was subscribed on: read again from the DataContext one name at a time and
+        /// compared as it goes, without building the path's entries a second time (as <see cref="SamePath"/> needs).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private static bool StillSamePath(ViewModelPropertyInfo<T>[] subscribed, object? dataContext)
+        {
+            object? current = dataContext;
+            for (var index = 0; index < subscribed.Length; index++)
+            {
+                if (!ReferenceEquals(current, subscribed[index].Accessor))
+                    return false;
+                if (index < subscribed.Length - 1)
+                    current = current == null ? null : MembersHelper.GetPropertyAccessor(current.GetType()).GetProperty(current, subscribed[index].Name);
+            }
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]

@@ -29,6 +29,14 @@ namespace FastBindings.StateManagerObjects
                 if (single.Length > 0)
                     return new[] { Describe(ParseOrInvalid(single, obj, dataContextParams, cache, treeHelper, description), description) };
             }
+            return BuildSeveral(sources, obj, dataContextParams, cache, treeHelper, description);
+        }
+
+        // in a method of its own: C# makes the lambda's closure on entry to the method that declares it, so in Build every binding paid
+        // for it, one source or several
+        private static ISourceStateManager[] BuildSeveral<T>(string sources, AvaloniaObject obj, DataContextParams dataContextParams,
+            ICache? cache, IViewModelTreeHelper<T> treeHelper, BindingDescription? description)
+        {
             return sources.Split(new string[] { PropertyPathParser.PropertiesDevider },
                     StringSplitOptions.RemoveEmptyEntries).
                           Select(property =>

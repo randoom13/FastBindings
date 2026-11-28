@@ -7,12 +7,22 @@ namespace FastBindings.StateManagerObjects
 {
     internal class DataContextParams
     {
-        private WeakReference _anchorObject = new WeakReference(null);
+        // made only for an anchor (a binding on an object that is no control, in a template): nearly every binding has none
+        private WeakReference? _anchorObject;
         public AvaloniaObject? AnchorObject
-        { 
-            get => _anchorObject.Target as AvaloniaObject;
-            set { _anchorObject.Target = value; }
+        {
+            get => _anchorObject?.Target as AvaloniaObject;
+            set
+            {
+                if (_anchorObject != null)
+                    _anchorObject.Target = value;
+                else if (value != null)
+                    _anchorObject = new WeakReference(value);
+            }
         }
+
+        /// <summary>The binding's own weak reference to its target, shared with its sources that hold the same object (one fewer each).</summary>
+        internal WeakReference? TargetRef { get; set; }
 
         public string? DataContextSource { get; set; }
 

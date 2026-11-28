@@ -40,15 +40,18 @@ namespace FastBindings.BindingManagers
             return result is TConverter ? (TConverter)result : default;
         }
 
+        // each in a method of its own, so the closure is made only when there is a converter (C# makes a captured local's closure on
+        // entry to the method that declares it: every DataContext change paid one with no converter at all)
+        private static Func<ConverterArgs, object> Forward(IForwardValueConverter converter, string? name) => args => converter.Convert(name, args);
+        private static Func<ConverterArgs, Task<object>> AsyncForward(IAsyncForwardValueConverter converter, string? name) => args => converter.AsyncConvert(name, args);
+        private static Func<ConverterBackArgs, object?[]> Back(IBackValueConverter converter, string? name) => args => converter.ConvertBack(name, args);
+
         internal Func<ConverterArgs, object>? FindForwardConverter(object? dataContext)
         {
             var converter = Converter != null ?
                 Converter as IForwardValueConverter : CalculateConverter<IForwardValueConverter>(dataContext);
 
-            if (converter != null)
-                return args => converter.Convert(ConverterName, args);
-
-            return null;
+            return converter != null ? Forward(converter, ConverterName) : null;
         }
 
         internal Func<ConverterArgs, Task<object>>? FindAsyncForwardConverter(object? dataContext)
@@ -56,10 +59,7 @@ namespace FastBindings.BindingManagers
             var converter = Converter != null ?
                 Converter as IAsyncForwardValueConverter : CalculateConverter<IAsyncForwardValueConverter>(dataContext);
 
-            if (converter != null)
-                return args => converter.AsyncConvert(ConverterName, args);
-
-            return null;
+            return converter != null ? AsyncForward(converter, ConverterName) : null;
         }
 
         internal Func<ConverterBackArgs, object?[]>? FindBackConverter(object? dataContext)
@@ -67,10 +67,7 @@ namespace FastBindings.BindingManagers
             var converter = Converter != null ?
                Converter as IBackValueConverter : CalculateConverter<IBackValueConverter>(dataContext);
 
-            if (converter != null)
-                return args => converter.ConvertBack(ConverterName, args);
-
-            return null;
+            return converter != null ? Back(converter, ConverterName) : null;
         }
     }
 }
