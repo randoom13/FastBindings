@@ -68,5 +68,12 @@ namespace FastBindings.Diagnostics
         // Trace
         /// <summary>A fast accessor or direct pusher could not be made: the binding works through the general path.</summary>
         FastPathUnavailable,
+
+        // Error (appended: the kinds before keep their numbers)
+        /// <summary>
+        /// A value change handed from a worker thread to the UI thread failed there with an exception nothing else caught: no caller
+        /// is left to catch it, and without this report it reached the dispatcher's unhandled-exception handler.
+        /// </summary>
+        UpdateFailed,
     }
 }

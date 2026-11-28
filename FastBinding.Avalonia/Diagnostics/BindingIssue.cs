@@ -75,6 +75,7 @@ namespace FastBindings.Diagnostics
         public static BindingIssueSeverity SeverityOf(BindingIssueKind kind) => kind switch
         {
             BindingIssueKind.FastPathUnavailable => BindingIssueSeverity.Trace,
+            BindingIssueKind.UpdateFailed => BindingIssueSeverity.Error,
             >= BindingIssueKind.PathNotFound => BindingIssueSeverity.Warning,
             _ => BindingIssueSeverity.Error,
         };

@@ -189,16 +189,36 @@ namespace FastBindings.BindingManagers
             if (dispatcher.CheckAccess())
             {
                 using var scope = BindingLog.Enter(Description, _targetObjectRef?.Target);
-                OnViewModelValueUpdatedAsync(target, sender, value);
+                Apply(target, sender, value);
             }
             else
             {
-                Action action = () => OnViewModelValueUpdatedAsync(target, sender, value);
-                dispatcher.Invoke(action);
+                // A change on another thread: handed to the UI thread in order and applied there — never Dispatcher.Invoke, which
+                // held the worker until the UI thread ran it (for ever, while the UI thread waited for that worker). The value is
+                // carried, not read again: an async source's value arrives already awaited.
+                dispatcher.Post(() =>
+                {
+                    using var posted = BindingLog.Enter(Description, target);
+                    Apply(target, sender, value);
+                });
             }
         }
 
-        private async void OnViewModelValueUpdatedAsync(AvaloniaObject target, object? sender, object? value)
+        // The update runs and awaits on the UI thread; an exception nothing inside caught is reported, never thrown into the
+        // dispatcher (an async void method's exception has no caller to reach).
+        private async void Apply(AvaloniaObject target, object? sender, object? value)
+        {
+            try
+            {
+                await OnViewModelValueUpdatedAsync(target, sender, value);
+            }
+            catch (Exception ex)
+            {
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.UpdateFailed, ex, "a change applied on the UI thread", target, binding: Description);
+            }
+        }
+
+        private async Task OnViewModelValueUpdatedAsync(AvaloniaObject target, object? sender, object? value)
         {
             var dataContextTarget = _dataContextParams.GetDataContextTarget(target);
             var dataContext = _dataContextParams.GetDataContext(dataContextTarget);

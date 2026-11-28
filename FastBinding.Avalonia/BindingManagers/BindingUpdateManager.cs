@@ -327,11 +327,20 @@ namespace FastBindings.BindingManagers
             var property = _targetProperty;
             if (target == null || property == null || _sourceStateManagers.Length == 0 || _updatingSource)
                 return;
-            var dataContext = _dataContextParams.GetDataContext(_dataContextParams.GetDataContextTarget(target));
-            if (dataContext == null)
-                return;
-            var first = _sourceStateManagers[0];
-            OnViewModelValueUpdated(target, property, first, first.GetSourceProperty(dataContext, true));
+            using var scope = BindingLog.Enter(Description, target);
+            try
+            {
+                var dataContext = _dataContextParams.GetDataContext(_dataContextParams.GetDataContextTarget(target));
+                if (dataContext == null)
+                    return;
+                var first = _sourceStateManagers[0];
+                OnViewModelValueUpdated(target, property, first, first.GetSourceProperty(dataContext, true));
+            }
+            catch (Exception ex)
+            {
+                // no caller is left to catch it here: reported, never thrown into the dispatcher
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.UpdateFailed, ex, "a change from another thread, applied on the UI thread", target, binding: Description);
+            }
         }
 
         private void OnViewModelValueUpdated(AvaloniaObject target, AvaloniaProperty property, object? sender, object? value)

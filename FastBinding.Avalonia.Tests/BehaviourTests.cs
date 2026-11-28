@@ -143,6 +143,25 @@ namespace FastBindings.Tests
             Assert.Equal("WORKER", ui.Find<TextBlock>("Text").Text);
         }
 
+        /// <summary>
+        /// The same for the one-way, async and async one-way bindings: each handed a worker's change over with Dispatcher.Invoke,
+        /// which held the worker until the UI thread ran it — for ever, while the UI thread waited for that worker.
+        /// </summary>
+        [AvaloniaTheory]
+        [InlineData("OneWay")]
+        [InlineData("AsyncOneWay")]
+        [InlineData("Async")]
+        public void A_change_on_a_worker_thread_never_waits_for_the_UI_thread(string name)
+        {
+            var vm = new Vm { A = "ui" };
+            using var ui = Ui.Show(new Workers(), vm);
+            Assert.Equal("ui", ui.Find<TextBlock>(name).Text);
+            var worker = Task.Run(() => vm.A = "worker");
+            Assert.True(worker.Wait(TimeSpan.FromSeconds(5)), "the worker waited for the UI thread");
+            Ui.Settle();
+            Assert.Equal("worker", ui.Find<TextBlock>(name).Text);
+        }
+
         [AvaloniaFact]
         public void FastBinding_reads_an_IPropertyAccessor_view_model()
         {

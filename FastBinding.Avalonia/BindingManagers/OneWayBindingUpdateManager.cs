@@ -6,6 +6,7 @@ using FastBindings.Helpers;
 using FastBindings.Interfaces;
 using FastBindings.StateManagerObjects;
 using System;
+using System.Threading;
 using System.Linq;
 using System.Reactive.Linq;
 
@@ -176,10 +177,37 @@ namespace FastBindings.BindingManagers
                 using var scope = BindingLog.Enter(Description, _targetObjectRef?.Target);
                 OnViewModelValueUpdated(target, sender, value);
             }
-            else
+            else if (Interlocked.Exchange(ref _refreshQueued, 1) == 0)
             {
-                Action action = () => OnViewModelValueUpdated(target, sender, value);
-                dispatcher.Invoke(action);
+                // A change on another thread: the UI thread reads the sources again when it gets to it — never Dispatcher.Invoke,
+                // which held the worker until the UI thread ran it (for ever, while the UI thread waited for that worker). One
+                // request at a time: a change while one waits is covered by the read it makes.
+                dispatcher.Post(_refresh ??= Refresh);
+            }
+        }
+
+        private int _refreshQueued;
+        private Action? _refresh;
+
+        private void Refresh()
+        {
+            Volatile.Write(ref _refreshQueued, 0);   // before reading: a change from now on asks again
+            var target = _targetObjectRef?.Target as AvaloniaObject;
+            if (target == null || _sourceStateManagers.Length == 0)
+                return;
+            using var scope = BindingLog.Enter(Description, target);
+            try
+            {
+                var dataContext = _dataContextParams.GetDataContext(_dataContextParams.GetDataContextTarget(target));
+                if (dataContext == null)
+                    return;
+                var first = _sourceStateManagers[0];
+                OnViewModelValueUpdated(target, first, first.GetSourceProperty(dataContext, true));
+            }
+            catch (Exception ex)
+            {
+                // no caller is left to catch it here: reported, never thrown into the dispatcher
+                if (BindingLog.IsOn) BindingLog.Report(BindingIssueKind.UpdateFailed, ex, "a change from another thread, applied on the UI thread", target, binding: Description);
             }
         }
 
